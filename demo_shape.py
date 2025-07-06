@@ -35,25 +35,26 @@ prog = ctx.program(
         in vec2 in_pos;
         uniform float scale;
         void main() {
-            gl_Position = vec4(in_pos.x, in_pos.y * scale, 0.0, 1.0);
+            // Scale upward from bottom: bottom stays at -1.0, top scales from -1.0
+            float scaledY = -1.0 + (in_pos.y + 1.0) * scale;
+            gl_Position = vec4(in_pos.x, scaledY, 0.0, 1.0);
         }
     ''',
     fragment_shader='''
         #version 330
         out vec4 fragColor;
-        uniform float scale;
         void main() {
-            fragColor = vec4(0.5*scale, 0.3, 0.3, 1.0);
+            fragColor = vec4(0.0, 0.0, 0.0, 1.0);
         }
     ''',
 )
 
-# Geometry: a vertical bar (scaled in shader)
+# Geometry: a vertical bar that grows from bottom (scaled in shader)
 bar_vertices = np.array([
-    [-1.0, -1.0],
-    [-0.9, -1.0],
-    [-0.9,  1.0],
-    [-1.0,  1.0],
+    [-1.0, -1.0],  # bottom-left (stays at bottom)
+    [-0.9, -1.0],  # bottom-right (stays at bottom)
+    [-0.9,  0.0],  # top-right (will be scaled upward)
+    [-1.0,  0.0],  # top-left (will be scaled upward)
 ], dtype='f4')
 
 vbo = ctx.buffer(bar_vertices.tobytes()) # vertex buffer object
