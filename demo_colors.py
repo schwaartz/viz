@@ -15,6 +15,8 @@ TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
 FINAL_VIDEO_FILE = 'output/final_output.mp4'
 WIDTH, HEIGHT = 1920, 1080
 BAR_COUNT = 128
+ALPHA_UP = 0.8   # EMA Fast response when values increase
+ALPHA_DOWN = 0.05 # EMA Slow decay when values decrease
 
 # ==== Load Audio ====
 y, sr = librosa.load(AUDIO_FILE, sr=None)
@@ -39,8 +41,9 @@ prog = ctx.program(
     fragment_shader='''
         #version 330
         out vec4 fragColor;
+        uniform float scale;
         void main() {
-            fragColor = vec4(0.1, 0.8, 0.6, 1.0);
+            fragColor = vec4(0.5*scale, 0.3, 0.3, 1.0);
         }
     ''',
 )
@@ -53,24 +56,56 @@ bar_vertices = np.array([
     [-1.0,  1.0],
 ], dtype='f4')
 
-vbo = ctx.buffer(bar_vertices.tobytes())
-vao = ctx.simple_vertex_array(prog, vbo, 'in_pos')
+vbo = ctx.buffer(bar_vertices.tobytes()) # vertex buffer object
+vao = ctx.simple_vertex_array(prog, vbo, 'in_pos') # vertex array object
 
 # Framebuffer for offscreen rendering
-fbo = ctx.simple_framebuffer((WIDTH, HEIGHT))
+fbo = ctx.simple_framebuffer((WIDTH, HEIGHT)) # framebuffer object
 fbo.use()
 
 # Video writer
 writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 
 # ==== Render Loop ====
-for frame in range(DURATION * FPS):
-    fbo.clear(0.05, 0.0, 0.1, 1.0)
+prev_background_color = np.zeros(4, dtype='f4')  # Initialize previous background color
 
+for frame in range(DURATION * FPS):
     magnitudes = stft[:, frame]
+
+    low = np.sum(magnitudes[:BAR_COUNT // 10])
+    mid = np.sum(magnitudes[BAR_COUNT // 10:BAR_COUNT * 3 // 2])
+    high = np.sum(magnitudes[BAR_COUNT * 3 // 4:])
+
+    loudness = np.sum(magnitudes)
+    total = low + mid + high
+
+    # Normalize the frequency bands to create color ratios
+    if total > 0:
+        low_ratio = low / total
+        mid_ratio = mid / total
+        high_ratio = high / total
+    else:
+        low_ratio = mid_ratio = high_ratio = 0
+    
+    # Scale by overall loudness for brightness
+    new_background_color = np.array([low_ratio * loudness, mid_ratio * loudness, high_ratio * loudness, 1.0], dtype='f4')
+    
+    # Asymmetric EMA: fast up, slow down
+    background_color = np.zeros_like(new_background_color)
+    for i in range(3):  # RGB channels only (skip alpha)
+        if new_background_color[i] > prev_background_color[i]:
+            # Use fast alpha for increases
+            background_color[i] = ALPHA_UP * new_background_color[i] + (1 - ALPHA_UP) * prev_background_color[i]
+        else:
+            # Use slow alpha for decreases
+            background_color[i] = ALPHA_DOWN * new_background_color[i] + (1 - ALPHA_DOWN) * prev_background_color[i]
+    background_color[3] = 1.0  # Keep alpha at 1.0
+
+    fbo.clear(*background_color)
+
     for i, mag in enumerate(magnitudes):
-        x_offset = (2.0 / BAR_COUNT) * i - 1.0
-        scale = mag * 2.5
+        x_offset = (2.0 / BAR_COUNT) * i - 1.0 # OpenGL coordinates range from -1 to 1
+        scale = mag * 2 # Scale bar height based on magnitude
 
         bar_vertices[:, 0] = np.array([0, 0.02, 0.02, 0]) + x_offset
         vbo.write(bar_vertices.astype('f4').tobytes())
@@ -81,6 +116,9 @@ for frame in range(DURATION * FPS):
     pixels = fbo.read(components=3, alignment=1)
     image = np.frombuffer(pixels, dtype=np.uint8).reshape((HEIGHT, WIDTH, 3))
     writer.append_data(np.flip(image, axis=0))  # flip Y-axis
+    
+    # Update previous background color for next frame
+    prev_background_color = background_color.copy()
 
 writer.close()
 pygame.quit()
@@ -100,4 +138,4 @@ subprocess.run([
 # Remove the temp file
 os.remove(TEMP_VIDEO_FILE)
 
-print(f"✅ Final video with audio saved as {FINAL_VIDEO_FILE}")
+print(f"Final video with audio saved as {FINAL_VIDEO_FILE}")
