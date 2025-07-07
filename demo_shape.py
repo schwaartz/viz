@@ -6,17 +6,19 @@ import pygame
 from pygame import display
 import subprocess
 import os
+from create_shape import create_shape
 
 # ==== Settings ====
 AUDIO_FILE = 'input/godhand.mp3'  # Must be mono or stereo WAV/MP3
 FPS = 30
-DURATION = 50  # seconds of video
+DURATION = 22  # seconds of video
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
 FINAL_VIDEO_FILE = 'output/final_output.mp4'
 WIDTH, HEIGHT = 1920, 1080
 BAR_COUNT = 128
 ALPHA_UP = 0.7   # EMA Fast response when values increase
 ALPHA_DOWN = 0.15 # EMA Slow decay when values decrease
+RPM = 30 # Revolutions per minute for the spinning animation
 
 # ==== Load Audio ====
 y, sr = librosa.load(AUDIO_FILE, sr=None)
@@ -49,6 +51,25 @@ prog = ctx.program(
     ''',
 )
 
+# Circle shader program
+circle_prog = ctx.program(
+    vertex_shader='''
+        #version 330
+        in vec2 in_pos;
+        uniform float radius;
+        void main() {
+            gl_Position = vec4(in_pos.x * radius, in_pos.y * radius, 0.0, 1.0);
+        }
+    ''',
+    fragment_shader='''
+        #version 330
+        out vec4 fragColor;
+        void main() {
+            fragColor = vec4(0.0, 0.0, 0.0, 1.0);  // Black circle
+        }
+    ''',
+)
+
 # Geometry: a vertical bar that grows from bottom (scaled in shader)
 bar_vertices = np.array([
     [-1.0, -1.0],  # bottom-left (stays at bottom)
@@ -69,6 +90,7 @@ writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 
 # ==== Render Loop ====
 prev_background_color = np.zeros(4, dtype='f4')  # Initialize previous background color
+prev_radius = 0.0  # Initialize previous size for circle
 
 for frame in range(DURATION * FPS):
     magnitudes = stft[:, frame]
@@ -112,6 +134,24 @@ for frame in range(DURATION * FPS):
         vbo.write(bar_vertices.astype('f4').tobytes())
         prog['scale'].value = scale
         vao.render(moderngl.TRIANGLE_FAN)
+
+    # Render the circle that scales with loudness
+    circle_radius = 0.1 + loudness * 0.3  # Base size 0.1, grows with loudness
+    if circle_radius > prev_radius:
+        # Use fast alpha for increases
+        circle_radius = ALPHA_UP * circle_radius + (1 - ALPHA_UP) * prev_radius
+    else:
+        # Use slow alpha for decreases
+        circle_radius = ALPHA_DOWN * circle_radius + (1 - ALPHA_DOWN) * prev_radius
+    prev_radius = circle_radius
+
+    circle_prog['radius'].value = circle_radius
+    rotations_per_frame = RPM / (60 * FPS)
+    angle = frame * rotations_per_frame * 2 * np.pi
+    freq_center_of_gravity = low_ratio * 0.0 + mid_ratio * 0.5 + high_ratio * 1.0 
+
+    circle_vao = create_shape(freq_center_of_gravity, angle, perturbations=5, ctx=ctx, prog=circle_prog, correction_factor=HEIGHT / WIDTH)
+    circle_vao.render(moderngl.TRIANGLE_FAN)
 
     # Read framebuffer and save to video
     pixels = fbo.read(components=3, alignment=1)
