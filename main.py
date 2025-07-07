@@ -5,6 +5,7 @@ import pygame
 import pygame
 import subprocess
 import os
+import time
 from visuals.create_shape import create_shape
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_background_color_asymmetric_ema, apply_asymmetric_ema
@@ -23,6 +24,11 @@ from constants import (
     CIRCLE_BASE_SIZE,
     CIRCLE_SCALE_FACTOR,
 )
+
+
+# ==== Settings ====
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1' # Hide Pygame's welcome message
+
 
 # ==== Visuals ====
 pygame.init()
@@ -52,11 +58,16 @@ fbo.use()
 
 
 # ==== Audio ====
+print("Starting audio processing...")
+audio_start = time.time()
 stft = short_time_fourrier_transform() # Load and process audio data
 audio_info = get_audio_info(stft, NUM_FREQ)  # Calculate audio information for the first frame
+audio_end = time.time()
 
 
 # ==== Render Loop ====
+print("Starting rendering...")
+render_start = time.time()
 prev_bg_color = np.zeros(4, dtype='f4')
 prev_radius = 0.0
 prev_avg_freq = 0.0
@@ -97,8 +108,12 @@ for frame in range(DURATION * FPS):
 
 writer.close()
 pygame.quit()
+render_end = time.time()
+
 
 # ==== Combine with audio ====
+print("Starting FFmpeg...")
+ffmpeg_start = time.time()
 subprocess.run([
     'ffmpeg',
     '-y',
@@ -109,6 +124,16 @@ subprocess.run([
     '-map', '1:a:0',  # Map audio from second input
     '-shortest',
     FINAL_VIDEO_FILE
-])
+], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+ffmpeg_end = time.time()
+
 os.remove(TEMP_VIDEO_FILE)
-print(f"Final video with audio saved as {FINAL_VIDEO_FILE}")
+
+total_time = ffmpeg_end - audio_start
+print(f"\nTIMING SUMMARY")
+print(f"To render a total of {DURATION} seconds of video at {FPS} FPS ({DURATION * FPS} frames):")
+print(f" - Audio processing: {audio_end - audio_start:.2f}s ({((audio_end - audio_start) / total_time * 100):.1f}%)")
+print(f" - Rendering:        {render_end - render_start:.2f}s ({((render_end - render_start) / total_time * 100):.1f}%)")
+print(f" - FFmpeg:           {ffmpeg_end - ffmpeg_start:.2f}s ({((ffmpeg_end - ffmpeg_start) / total_time * 100):.1f}%)")
+print(f" - Total:            {total_time:.2f}s")
+print(f"\nFinal video with audio saved as {FINAL_VIDEO_FILE}")
