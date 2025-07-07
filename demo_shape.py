@@ -7,6 +7,7 @@ from pygame import display
 import subprocess
 import os
 from create_shape import create_shape
+from sigmoid import sigmoid
 
 # ==== Settings ====
 AUDIO_FILE = 'input/godhand.mp3'  # Must be mono or stereo WAV/MP3
@@ -18,7 +19,7 @@ WIDTH, HEIGHT = 1920, 1080
 BAR_COUNT = 128
 ALPHA_UP = 0.7   # EMA Fast response when values increase
 ALPHA_DOWN = 0.15 # EMA Slow decay when values decrease
-RPM = 30 # Revolutions per minute for the spinning animation
+RPM = 80 # Revolutions per minute for the spinning animation
 
 # ==== Load Audio ====
 y, sr = librosa.load(AUDIO_FILE, sr=None)
@@ -91,6 +92,8 @@ writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 # ==== Render Loop ====
 prev_background_color = np.zeros(4, dtype='f4')  # Initialize previous background color
 prev_radius = 0.0  # Initialize previous size for circle
+prev_freq_center_of_gravity = 0.0  # Initialize previous center of gravity for frequency bands
+curr_rotation = 0.0  # Initialize current rotation angle
 
 for frame in range(DURATION * FPS):
     magnitudes = stft[:, frame]
@@ -123,6 +126,7 @@ for frame in range(DURATION * FPS):
             # Use slow alpha for decreases
             background_color[i] = ALPHA_DOWN * new_background_color[i] + (1 - ALPHA_DOWN) * prev_background_color[i]
     background_color[3] = 1.0  # Keep alpha at 1.0
+    prev_background_color = background_color.copy()
 
     fbo.clear(*background_color)
 
@@ -146,20 +150,24 @@ for frame in range(DURATION * FPS):
     prev_radius = circle_radius
 
     circle_prog['radius'].value = circle_radius
-    rotations_per_frame = RPM / (60 * FPS)
-    angle = frame * rotations_per_frame * 2 * np.pi
-    freq_center_of_gravity = low_ratio * 0.0 + mid_ratio * 0.5 + high_ratio * 1.0 
+    rotations_per_frame = loudness * RPM / (60 * FPS)
+    curr_rotation = curr_rotation + rotations_per_frame * 2 * np.pi
+    freq_center_of_gravity = low_ratio * 0.0 + mid_ratio * 0.5 + high_ratio * 1.0
+    if freq_center_of_gravity > prev_freq_center_of_gravity:
+        # Use fast alpha for increases
+        freq_center_of_gravity = ALPHA_UP * freq_center_of_gravity + (1 - ALPHA_UP) * prev_freq_center_of_gravity
+    else:
+        # Use slow alpha for decreases
+        freq_center_of_gravity = ALPHA_DOWN * freq_center_of_gravity + (1 - ALPHA_DOWN) * prev_freq_center_of_gravity
+    prev_freq_center_of_gravity = freq_center_of_gravity
 
-    circle_vao = create_shape(freq_center_of_gravity, angle, perturbations=5, ctx=ctx, prog=circle_prog, correction_factor=HEIGHT / WIDTH)
+    circle_vao = create_shape(2.5*freq_center_of_gravity, curr_rotation, perturbations=5, ctx=ctx, prog=circle_prog, correction_factor=HEIGHT / WIDTH)
     circle_vao.render(moderngl.TRIANGLE_FAN)
 
     # Read framebuffer and save to video
     pixels = fbo.read(components=3, alignment=1)
     image = np.frombuffer(pixels, dtype=np.uint8).reshape((HEIGHT, WIDTH, 3))
     writer.append_data(np.flip(image, axis=0))  # flip Y-axis
-    
-    # Update previous background color for next frame
-    prev_background_color = background_color.copy()
 
 writer.close()
 pygame.quit()
