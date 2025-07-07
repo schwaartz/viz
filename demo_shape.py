@@ -7,7 +7,7 @@ from pygame import display
 import subprocess
 import os
 from create_shape import create_shape
-from sigmoid import sigmoid
+from utils.sigmoid import sigmoid
 
 # ==== Settings ====
 AUDIO_FILE = 'input/spooky_beat.mp3'  # Must be mono or stereo WAV/MP3
