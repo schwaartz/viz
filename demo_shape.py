@@ -10,11 +10,11 @@ from create_shape import create_shape
 from sigmoid import sigmoid
 
 # ==== Settings ====
-AUDIO_FILE = 'input/godhand.mp3'  # Must be mono or stereo WAV/MP3
+AUDIO_FILE = 'input/spooky_beat.mp3'  # Must be mono or stereo WAV/MP3
 FPS = 30
 DURATION = 22  # seconds of video
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
-FINAL_VIDEO_FILE = 'output/final_output.mp4'
+FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
 WIDTH, HEIGHT = 1920, 1080
 BAR_COUNT = 128
 ALPHA_UP = 0.7   # EMA Fast response when values increase
@@ -32,27 +32,8 @@ stft = stft / np.max(stft)  # normalize
 pygame.init()
 pygame.display.set_mode((WIDTH, HEIGHT), pygame.OPENGL | pygame.DOUBLEBUF)
 ctx = moderngl.create_context()
-prog = ctx.program(
-    vertex_shader='''
-        #version 330
-        in vec2 in_pos;
-        uniform float scale;
-        void main() {
-            // Scale upward from bottom: bottom stays at -1.0, top scales from -1.0
-            float scaledY = -1.0 + (in_pos.y + 1.0) * scale;
-            gl_Position = vec4(in_pos.x, scaledY, 0.0, 1.0);
-        }
-    ''',
-    fragment_shader='''
-        #version 330
-        out vec4 fragColor;
-        void main() {
-            fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        }
-    ''',
-)
 
-# Circle shader program
+# Shape shader program
 circle_prog = ctx.program(
     vertex_shader='''
         #version 330
@@ -71,18 +52,6 @@ circle_prog = ctx.program(
     ''',
 )
 
-# Geometry: a vertical bar that grows from bottom (scaled in shader)
-bar_vertices = np.array([
-    [-1.0, -1.0],  # bottom-left (stays at bottom)
-    [-0.9, -1.0],  # bottom-right (stays at bottom)
-    [-0.9,  0.0],  # top-right (will be scaled upward)
-    [-1.0,  0.0],  # top-left (will be scaled upward)
-], dtype='f4')
-
-vbo = ctx.buffer(bar_vertices.tobytes()) # vertex buffer object
-vao = ctx.simple_vertex_array(prog, vbo, 'in_pos') # vertex array object
-
-# Framebuffer for offscreen rendering
 fbo = ctx.simple_framebuffer((WIDTH, HEIGHT)) # framebuffer object
 fbo.use()
 
@@ -130,15 +99,6 @@ for frame in range(DURATION * FPS):
 
     fbo.clear(*background_color)
 
-    for i, mag in enumerate(magnitudes):
-        x_offset = (2.0 / BAR_COUNT) * i - 1.0 # OpenGL coordinates range from -1 to 1
-        scale = mag * 2 # Scale bar height based on magnitude
-
-        bar_vertices[:, 0] = np.array([0, 0.02, 0.02, 0]) + x_offset
-        vbo.write(bar_vertices.astype('f4').tobytes())
-        prog['scale'].value = scale
-        vao.render(moderngl.TRIANGLE_FAN)
-
     # Render the circle that scales with loudness
     circle_radius = 0.1 + loudness * 0.3  # Base size 0.1, grows with loudness
     if circle_radius > prev_radius:
@@ -179,7 +139,8 @@ subprocess.run([
     '-i', TEMP_VIDEO_FILE,
     '-i', AUDIO_FILE,
     '-c:v', 'copy',
-    '-c:a', 'aac',
+    '-map', '0:v:0',  # Map video from first input
+    '-map', '1:a:0',  # Map audio from second input
     '-shortest',
     FINAL_VIDEO_FILE
 ])
