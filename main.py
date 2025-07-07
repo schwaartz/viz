@@ -10,6 +10,7 @@ from visuals.create_shape import create_shape
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_background_color_asymmetric_ema, apply_asymmetric_ema
 from constants import (
+    PERTURBATION_MAX_AMOUNT,
     TEMP_VIDEO_FILE,
     FINAL_VIDEO_FILE,
     AUDIO_FILE,
@@ -18,11 +19,17 @@ from constants import (
     WIDTH,
     HEIGHT,
     NUM_FREQ,
-    ALPHA_UP,
-    ALPHA_DOWN,
+    ALPHA_UP_COLOR,
+    ALPHA_DOWN_COLOR,
+    ALPHA_UP_RADIUS,
+    ALPHA_DOWN_RADIUS,
+    ALPHA_UP_AVG_FREQ,
+    ALPHA_DOWN_AVG_FREQ,
     RPM,
     CIRCLE_BASE_SIZE,
     CIRCLE_SCALE_FACTOR,
+    USE_FIXED_PERT_NUM,
+    FIXED_PERT_NUM
 )
 
 
@@ -39,9 +46,8 @@ shape_prog = ctx.program(
     vertex_shader='''
         #version 330
         in vec2 in_pos;
-        uniform float radius;
         void main() {
-            gl_Position = vec4(in_pos.x * radius, in_pos.y * radius, 0.0, 1.0);
+            gl_Position = vec4(in_pos.x, in_pos.y, 0.0, 1.0);
         }
     ''',
     fragment_shader='''
@@ -71,22 +77,22 @@ render_start = time.time()
 prev_bg_color = np.zeros(4, dtype='f4')
 prev_radius = 0.0
 prev_avg_freq = 0.0
+prev_pert_num_float = 0.0
 curr_rotation = 0.0 
 
 for frame in range(DURATION * FPS):
-    curr_info = audio_info[frame]
+    curr_info: AudioInfo = audio_info[frame]
 
     # Set background color
     new_bg_color = np.array([*curr_info.color, 1.0], dtype='f4')
-    bg_color = apply_background_color_asymmetric_ema(prev_bg_color, new_bg_color, ALPHA_UP, ALPHA_DOWN)
+    bg_color = apply_background_color_asymmetric_ema(prev_bg_color, new_bg_color, ALPHA_UP_COLOR, ALPHA_DOWN_COLOR)
     prev_bg_color = bg_color.copy()
     fbo.clear(*bg_color)
 
     # Determine the size based on loudness
     new_radius = CIRCLE_BASE_SIZE + curr_info.loudness * CIRCLE_SCALE_FACTOR
-    radius = apply_asymmetric_ema(prev_radius, new_radius, ALPHA_UP, ALPHA_DOWN)
+    radius = apply_asymmetric_ema(prev_radius, new_radius, ALPHA_UP_RADIUS, ALPHA_DOWN_RADIUS)
     prev_radius = radius
-    shape_prog['radius'].value = radius
 
     # Determine the rotation 
     rotations_per_frame = curr_info.loudness * RPM / (60 * FPS)
@@ -94,11 +100,19 @@ for frame in range(DURATION * FPS):
 
     # Determine the average frequency
     new_avg_freq = curr_info.avg_freq
-    avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP, ALPHA_DOWN)
+    avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
     prev_avg_freq = avg_freq
 
+    # Determine the number of perturbations
+    if USE_FIXED_PERT_NUM:
+        pert_num_float = FIXED_PERT_NUM
+    else:
+        new_pert_num_float = avg_freq * PERTURBATION_MAX_AMOUNT
+        pert_num_float = apply_asymmetric_ema(prev_pert_num_float, new_pert_num_float, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
+        prev_pert_num_float = pert_num_float
+
     # Create and render the shape
-    shape_vao = create_shape(2.5*avg_freq, curr_rotation, perturbations=5, ctx=ctx, prog=shape_prog, correction_factor=HEIGHT / WIDTH)
+    shape_vao = create_shape(radius, avg_freq, curr_rotation, int(pert_num_float), ctx, prog=shape_prog)
     shape_vao.render(moderngl.TRIANGLE_FAN)
 
     # Read framebuffer and save to video

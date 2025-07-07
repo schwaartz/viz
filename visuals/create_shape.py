@@ -1,18 +1,18 @@
 import numpy as np
 import moderngl
+from constants import PORTRUSION_FACTOR, HEIGHT, WIDTH
 
 SEGMENTS = 128
 
-def create_shape(freq_center_of_gravity: float, angle: float, perturbations: int, ctx: moderngl.Context, prog: moderngl.Program, correction_factor: float) -> moderngl.VertexArray:
+def create_shape(radius: float, avg_freq: float, angle: float, pert_num: int, ctx: moderngl.Context, prog: moderngl.Program) -> moderngl.VertexArray:
     """
     Creates a vertex array object (VAO) representing a circular shape with optional perturbations and rotation.
     Parameters:
-        freq_center_of_gravity (float): Determines the spikiness or frequency-based deformation of the shape.
+        avg_freq (float): Determines the spikiness or frequency-based deformation of the shape.
         angle (float): The rotation angle (in radians) to apply to the shape.
-        perturbations (int): The number of perturbations to apply to the outer edge of the shape.
+        pert_num (int): The number of perturbations to apply to the outer edge of the shape.
         ctx (moderngl.Context): The ModernGL context used to create buffers and VAOs.
         prog (moderngl.Program): The shader program to use for rendering the shape.
-        correction_factor (float): A factor to correct the aspect ratio of the shape, typically HEIGHT / WIDTH.
     Returns:
         moderngl.VertexArray: A vertex array object representing the generated shape.
     Notes:
@@ -25,8 +25,11 @@ def create_shape(freq_center_of_gravity: float, angle: float, perturbations: int
     vertices.append([0.0, 0.0])  # Center point
     for i in range(SEGMENTS + 1):
         theta = 2.0 * np.pi * i / SEGMENTS
-        portrusion = np.sin(perturbations * theta + angle) * freq_center_of_gravity + 2.0
-        portrusion = portrusion / 3 # Normalize to avoid excessive protrusion
+        portrusion = avg_freq * (np.sin(pert_num * theta + angle) + 1.0) / 2
+        portrusion = portrusion * PORTRUSION_FACTOR # Normalize to avoid excessive protrusion
+        portrusion = radius + portrusion # The circle is at least the radius size everywhere
+
+        correction_factor = HEIGHT / WIDTH
         x = portrusion * np.cos(theta) * correction_factor # Correction to get a circle, not an ellipse
         y = portrusion * np.sin(theta)
         vertices.append([x, y])

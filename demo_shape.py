@@ -121,7 +121,7 @@ for frame in range(DURATION * FPS):
         freq_center_of_gravity = ALPHA_DOWN * freq_center_of_gravity + (1 - ALPHA_DOWN) * prev_freq_center_of_gravity
     prev_freq_center_of_gravity = freq_center_of_gravity
 
-    circle_vao = create_shape(2.5*freq_center_of_gravity, curr_rotation, perturbations=5, ctx=ctx, prog=circle_prog, correction_factor=HEIGHT / WIDTH)
+    circle_vao = create_shape(2.5*freq_center_of_gravity, curr_rotation, pert_num=5, ctx=ctx, prog=circle_prog, correction_factor=HEIGHT / WIDTH)
     circle_vao.render(moderngl.TRIANGLE_FAN)
 
     # Read framebuffer and save to video
