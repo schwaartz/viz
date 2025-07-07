@@ -6,7 +6,7 @@ import pygame
 from pygame import display
 import subprocess
 import os
-from create_shape import create_shape
+from visuals.create_shape import create_shape
 from utils.sigmoid import sigmoid
 
 # ==== Settings ====

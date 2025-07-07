@@ -1,0 +1,12 @@
+AUDIO_FILE = 'input/spooky_beat.mp3'
+FPS = 30
+DURATION = 22  # seconds of video
+TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
+FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
+WIDTH, HEIGHT = 1920, 1080
+NUM_FREQ = 128
+ALPHA_UP = 0.7   # EMA Fast response when values increase
+ALPHA_DOWN = 0.15 # EMA Slow decay when values decrease
+RPM = 300 # Revolutions per minute for the spinning animation
+CIRCLE_BASE_SIZE = 0.1  # Base size of the circle
+CIRCLE_SCALE_FACTOR = 0.3  # Scale factor for circle size based on loud
