@@ -25,7 +25,7 @@ def create_shape(radius: float, avg_freq: float, angle: float, pert_num: int, ct
     vertices.append([0.0, 0.0])  # Center point
     for i in range(SEGMENTS + 1):
         theta = 2.0 * np.pi * i / SEGMENTS
-        portrusion = avg_freq * (np.sin(pert_num * theta + angle) + 1.0) / 2
+        portrusion = avg_freq * ((np.sin(pert_num * theta + angle) + 1.0) / 2) ** 2 # Taking the square just looks good
         portrusion = portrusion * PORTRUSION_FACTOR # Normalize to avoid excessive protrusion
         portrusion = radius + portrusion # The circle is at least the radius size everywhere
 

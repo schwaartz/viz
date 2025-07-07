@@ -1,6 +1,6 @@
 AUDIO_FILE = 'input/spooky_beat.mp3'
 FPS = 30
-DURATION = 22  # in seconds
+DURATION = 50  # in seconds
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
 FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
 WIDTH, HEIGHT = 1920, 1080
@@ -13,7 +13,7 @@ NUM_FREQ = 128
 RPM = 350 # Revolutions per minute for the spinning animation
 CIRCLE_BASE_SIZE = 0.1  # Base size of the circle
 CIRCLE_SCALE_FACTOR = 0.15  # Scale factor for circle size based on loud
-PORTRUSION_FACTOR = 0.15  # Factor to normalize protrusion in the shape 
+PORTRUSION_FACTOR = 0.30  # Factor to normalize protrusion in the shape 
 PERTURBATION_MAX_AMOUNT = 10 # This also generally influences the amount perturbations
 
 # Asymmetric EMA settings
