@@ -1,6 +1,6 @@
 # Audio Visualizer
 
-A Python-based audio visualizer that creates animated videos with dynamic shapes responding to music.
+A Python-based audio visualizer that creates animated videos with moving shapes and colors responding to music.
 
 ## Requirements
 
