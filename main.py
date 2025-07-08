@@ -1,8 +1,6 @@
 import moderngl
 import numpy as np
 import imageio
-import pygame
-import pygame
 import subprocess
 import os
 import time
@@ -33,14 +31,8 @@ from constants import (
 )
 
 
-# ==== Settings ====
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1' # Hide Pygame's welcome message
-
-
 # ==== Visuals ====
-pygame.init()
-pygame.display.set_mode((WIDTH, HEIGHT), pygame.OPENGL | pygame.DOUBLEBUF)
-ctx = moderngl.create_context()
+ctx = moderngl.create_context(standalone=True)
 writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 shape_prog = ctx.program(
     vertex_shader='''
@@ -121,7 +113,6 @@ for frame in range(DURATION * FPS):
     writer.append_data(np.flip(image, axis=0))  # flip Y-axis
 
 writer.close()
-pygame.quit()
 render_end = time.time()
 
 
