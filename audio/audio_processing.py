@@ -1,6 +1,6 @@
 import librosa
 import numpy as np
-from constants import AUDIO_FILE, FPS, DURATION, NUM_FREQ
+from constants import AUDIO_FILE, FPS, DURATION, NUM_FREQ, LOWER_FREQ_WEIGHT_FUNC_EXPONENT
 import colorsys
 
 def short_time_fourrier_transform() -> np.ndarray:
@@ -29,8 +29,10 @@ def frequency_to_color(ratio: float) -> tuple:
 def get_audio_info(stft: np.ndarray, sr: int) -> list:
     """Compute AudioInfo for all frames, with normalization."""
     freqs = np.linspace(0, sr // 2, stft.shape[0])
-    loudness_arr = np.sum(stft, axis=0)
-    avg_freq_arr = np.sum(freqs[:, None] * stft, axis=0) / (loudness_arr + 1e-8)
+    max_freq = freqs[-1]
+    freq_weights = 1.0 - (freqs / max_freq) ** LOWER_FREQ_WEIGHT_FUNC_EXPONENT
+    loudness_arr = np.sum(stft * freq_weights[:, None], axis=0)
+    avg_freq_arr = np.sum(freqs[:, None] * stft, axis=0) / (np.sum(stft, axis=0) + 1e-8)
 
     # Normalize loudness and avg_freq
     loudness_min, loudness_max = loudness_arr.min(), loudness_arr.max()
