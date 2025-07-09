@@ -6,50 +6,26 @@ import os
 import time
 from visuals.create_shape import create_shape
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
-from utils.ema import apply_background_color_asymmetric_ema, apply_asymmetric_ema
-from constants import (
-    PERTURBATION_MAX_AMOUNT,
-    TEMP_VIDEO_FILE,
-    FINAL_VIDEO_FILE,
-    AUDIO_FILE,
-    FPS,
-    DURATION,
-    WIDTH,
-    HEIGHT,
-    NUM_FREQ,
-    ALPHA_UP_COLOR,
-    ALPHA_DOWN_COLOR,
-    ALPHA_UP_RADIUS,
-    ALPHA_DOWN_RADIUS,
-    ALPHA_UP_AVG_FREQ,
-    ALPHA_DOWN_AVG_FREQ,
-    RPM,
-    CIRCLE_BASE_SIZE,
-    CIRCLE_SCALE_FACTOR,
-    USE_FIXED_PERT_NUM,
-    FIXED_PERT_NUM
-)
+from utils.ema import apply_asymmetric_ema
+from utils.load_shader import load_shader_program
+from constants import *
 
 
 # ==== Visuals ====
 ctx = moderngl.create_context(standalone=True)
 writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
-shape_prog = ctx.program(
-    vertex_shader='''
-        #version 330
-        in vec2 in_pos;
-        void main() {
-            gl_Position = vec4(in_pos.x, in_pos.y, 0.0, 1.0);
-        }
-    ''',
-    fragment_shader='''
-        #version 330
-        out vec4 fragColor;
-        void main() {
-            fragColor = vec4(0.0, 0.0, 0.0, 1.0);  // Black circle
-        }
-    ''',
-)
+shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
+bg_wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
+
+# Create fullscreen quad for wave rendering
+bg_quad_vertices = np.array([
+    [-1.0, -1.0],
+    [ 1.0, -1.0],
+    [ 1.0,  1.0],
+    [-1.0,  1.0], 
+], dtype='f4')
+bg_quad_vbo = ctx.buffer(bg_quad_vertices.tobytes())
+bg_quad_vao = ctx.simple_vertex_array(bg_wave_prog, bg_quad_vbo, 'in_pos')
 
 fbo = ctx.simple_framebuffer((WIDTH, HEIGHT)) # framebuffer object
 fbo.use()
@@ -66,21 +42,22 @@ audio_end = time.time()
 # ==== Render Loop ====
 print("Starting rendering...")
 render_start = time.time()
-prev_bg_color = np.zeros(4, dtype='f4')
+
+frame_since_last_wave = 0
+active_waves = []
+curr_rotation = 0.0 
 prev_radius = 0.0
 prev_avg_freq = 0.0
-prev_pert_num_float = 0.0
-curr_rotation = 0.0 
+prev_portr_num_float = 0.0
+prev_brightness = 1.0
+prev_color = np.array([0.0, 0.0, 0.0])
 
 for frame in range(DURATION * FPS):
     curr_info: AudioInfo = audio_info[frame]
-
-    # Set background color
-    new_bg_color = np.array([*curr_info.color, 1.0], dtype='f4')
-    bg_color = apply_background_color_asymmetric_ema(prev_bg_color, new_bg_color, ALPHA_UP_COLOR, ALPHA_DOWN_COLOR)
-    prev_bg_color = bg_color.copy()
-    fbo.clear(*bg_color)
-
+    current_color = np.array(curr_info.color)
+    color_diff = np.linalg.norm(current_color - prev_color)
+    frame_since_last_wave += 1
+    
     # Determine the size based on loudness
     new_radius = CIRCLE_BASE_SIZE + curr_info.loudness * CIRCLE_SCALE_FACTOR
     radius = apply_asymmetric_ema(prev_radius, new_radius, ALPHA_UP_RADIUS, ALPHA_DOWN_RADIUS)
@@ -95,16 +72,64 @@ for frame in range(DURATION * FPS):
     avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
     prev_avg_freq = avg_freq
 
-    # Determine the number of perturbations
-    if USE_FIXED_PERT_NUM:
-        pert_num_float = FIXED_PERT_NUM
+    # Determine the number of portrusions
+    if USE_FIXED_PORTR_NUM:
+        portr_num_float = FIXED_PORTR_NUM
     else:
-        new_pert_num_float = avg_freq * PERTURBATION_MAX_AMOUNT
-        pert_num_float = apply_asymmetric_ema(prev_pert_num_float, new_pert_num_float, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
-        prev_pert_num_float = pert_num_float
+        new_portr_num_float = avg_freq * PORTR_MAX_AMOUNT
+        portr_num_float = apply_asymmetric_ema(prev_portr_num_float, new_portr_num_float, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
+        prev_portr_num_float = portr_num_float
+
+    # Check if new wave should spawn
+    if (frame == 0 or color_diff > COLOR_CHANGE_THRESHOLD or
+        frame_since_last_wave > MAX_FRAMES_BETWEEN_WAVES or len(active_waves) == 0):
+        active_waves.append({
+            'color': curr_info.color,
+            'radius': 0.0
+        })
+        prev_color = current_color.copy()
+        frame_since_last_wave = 0  # Reset counter
+    
+    # Update all active waves
+    for wave in active_waves.copy():
+        dynamic_speed = BASE_WAVE_SPEED + curr_info.loudness * WAVE_SPEED_MULTIPLIER
+        wave['radius'] += dynamic_speed
+        if wave['radius'] > WAVE_REMOVAL_RADIUS:
+            active_waves.remove(wave)
+    
+    # Keep only the most recent waves (performance optimization)
+    if len(active_waves) > MAX_WAVES:
+        active_waves = active_waves[-MAX_WAVES:]
+    
+    # Clear framebuffer
+    fbo.clear(0.0, 0.0, 0.0, 1.0)
+    
+    # Prepare wave data for shader
+    wave_colors = []
+    wave_radii = []
+    
+    for wave in active_waves:
+        wave_colors.append(wave['color']) # vec3
+        wave_radii.append(wave['radius']) # float
+    
+    # Pad arrays to buffer size
+    while len(wave_colors) < MAX_WAVES:
+        wave_colors.append([0.0, 0.0, 0.0])
+    while len(wave_radii) < MAX_WAVES:
+        wave_radii.append(0.0)
+    
+    # Set shader uniforms
+    bg_wave_prog['wave_colors'].value = wave_colors
+    bg_wave_prog['wave_radii'].value = wave_radii
+    bg_wave_prog['num_waves'].value = len(active_waves)
+    bg_wave_prog['wave_thickness'].value = WAVE_THICKNESS
+    bg_wave_prog['brightness'].value = BRIGHTNESS
+    
+    # Render wave background
+    bg_quad_vao.render(moderngl.TRIANGLE_FAN)
 
     # Create and render the shape
-    shape_vao = create_shape(radius, avg_freq, curr_rotation, int(pert_num_float), ctx, prog=shape_prog)
+    shape_vao = create_shape(radius, avg_freq, curr_rotation, int(portr_num_float), ctx, prog=shape_prog)
     shape_vao.render(moderngl.TRIANGLE_FAN)
 
     # Read framebuffer and save to video
