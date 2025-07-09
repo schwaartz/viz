@@ -40,8 +40,9 @@ audio_end = time.time()
 
 
 # ==== Render Loop ====
-print("Starting rendering...")
-render_start = time.time()
+print("Starting render loop...")
+render_loop_start = time.time()
+total_rendering_time = 0.0
 
 frame_since_last_wave = 0
 active_waves = []
@@ -124,13 +125,16 @@ for frame in range(DURATION * FPS):
     bg_wave_prog['num_waves'].value = len(active_waves)
     bg_wave_prog['wave_thickness'].value = WAVE_THICKNESS
     bg_wave_prog['brightness'].value = BRIGHTNESS
-    
-    # Render wave background
-    bg_quad_vao.render(moderngl.TRIANGLE_FAN)
 
-    # Create and render the shape
+    # Create the shape
     shape_vao = create_shape(radius, avg_freq, curr_rotation, int(portr_num_float), ctx, prog=shape_prog)
+
+    # Render the waves and the shape
+    render_start = time.time()
+    bg_quad_vao.render(moderngl.TRIANGLE_FAN)
     shape_vao.render(moderngl.TRIANGLE_FAN)
+    render_end = time.time()
+    total_rendering_time += render_end - render_start
 
     # Read framebuffer and save to video
     pixels = fbo.read(components=3, alignment=1)
@@ -138,7 +142,7 @@ for frame in range(DURATION * FPS):
     writer.append_data(np.flip(image, axis=0))  # flip Y-axis
 
 writer.close()
-render_end = time.time()
+render_loop_end = time.time()
 
 
 # ==== Combine with audio ====
@@ -163,7 +167,8 @@ total_time = ffmpeg_end - audio_start
 print(f"\nTIMING SUMMARY")
 print(f"To render a total of {DURATION} seconds of video at {FPS} FPS ({DURATION * FPS} frames):")
 print(f" - Audio processing: {audio_end - audio_start:.2f}s ({((audio_end - audio_start) / total_time * 100):.1f}%)")
-print(f" - Rendering:        {render_end - render_start:.2f}s ({((render_end - render_start) / total_time * 100):.1f}%)")
+print(f" - Render Loop:        {render_loop_end - render_loop_start:.2f}s ({((render_loop_end - render_loop_start) / total_time * 100):.1f}%)")
+print(f"   - Actual time spend rendering frames: {total_rendering_time:.2f}s ({(total_rendering_time / (render_loop_end - render_loop_start) * 100):.1f}%)")
 print(f" - FFmpeg:           {ffmpeg_end - ffmpeg_start:.2f}s ({((ffmpeg_end - ffmpeg_start) / total_time * 100):.1f}%)")
 print(f" - Total:            {total_time:.2f}s")
 print(f"\nFinal video with audio saved as {FINAL_VIDEO_FILE}")
