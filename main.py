@@ -48,7 +48,7 @@ active_waves = []
 curr_rotation = 0.0 
 prev_radius = 0.0
 prev_avg_freq = 0.0
-prev_pert_num_float = 0.0
+prev_portr_num_float = 0.0
 prev_brightness = 1.0
 prev_color = np.array([0.0, 0.0, 0.0])
 
@@ -72,13 +72,13 @@ for frame in range(DURATION * FPS):
     avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
     prev_avg_freq = avg_freq
 
-    # Determine the number of perturbations
-    if USE_FIXED_PERT_NUM:
-        pert_num_float = FIXED_PERT_NUM
+    # Determine the number of portrusions
+    if USE_FIXED_PORTR_NUM:
+        portr_num_float = FIXED_PORTR_NUM
     else:
-        new_pert_num_float = avg_freq * PERTURBATION_MAX_AMOUNT
-        pert_num_float = apply_asymmetric_ema(prev_pert_num_float, new_pert_num_float, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
-        prev_pert_num_float = pert_num_float
+        new_portr_num_float = avg_freq * PORTR_MAX_AMOUNT
+        portr_num_float = apply_asymmetric_ema(prev_portr_num_float, new_portr_num_float, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
+        prev_portr_num_float = portr_num_float
 
     # Check if new wave should spawn
     if (frame == 0 or color_diff > COLOR_CHANGE_THRESHOLD or
@@ -129,7 +129,7 @@ for frame in range(DURATION * FPS):
     bg_quad_vao.render(moderngl.TRIANGLE_FAN)
 
     # Create and render the shape
-    shape_vao = create_shape(radius, avg_freq, curr_rotation, int(pert_num_float), ctx, prog=shape_prog)
+    shape_vao = create_shape(radius, avg_freq, curr_rotation, int(portr_num_float), ctx, prog=shape_prog)
     shape_vao.render(moderngl.TRIANGLE_FAN)
 
     # Read framebuffer and save to video
