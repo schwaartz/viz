@@ -4,7 +4,10 @@ from constants import AUDIO_FILE, FPS, DURATION, NUM_FREQ, LOWER_FREQ_WEIGHT_FUN
 import colorsys
 
 def short_time_fourrier_transform() -> np.ndarray:
-    """Load audio file and compute its Short Time Fourier Transform (STFT)."""
+    """
+    Load audio file and compute its Short Time Fourier Transform (STFT).
+    :return: STFT of the audio file, shape [freq_bins, frames].
+    """
     y, sr = librosa.load(AUDIO_FILE, sr=None, mono=True)
     hop_length = int(sr / FPS)
     stft = np.abs(librosa.stft(y, n_fft=NUM_FREQ * 2, hop_length=hop_length))
@@ -13,21 +16,31 @@ def short_time_fourrier_transform() -> np.ndarray:
     return stft
 
 class AudioInfo:
-    """Class to hold audio information for a specific frame."""
+    """
+    Class to hold audio information for a specific frame.
+    """
     def __init__(self, loudness, avg_freq, color):
         self.loudness = loudness
         self.avg_freq = avg_freq
         self.color = color
 
 def frequency_to_color(ratio: float) -> tuple:
-    """Convert frequency to RGB color."""
+    """
+    Convert frequency to RGB color.
+    :param ratio: Normalized frequency ratio in [0, 1].
+    :return: RGB color tuple.
+    """
     ratio = np.clip(ratio, 0, 1)
     hue = ratio  # hue in [0, 1]
     r, g, b = colorsys.hsv_to_rgb(hue, 1, 1)
     return (r, g, b)
 
 def get_audio_info(stft: np.ndarray, sr: int) -> list:
-    """Compute AudioInfo for all frames, with normalization."""
+    """
+    Compute AudioInfo for all frames, with normalization.
+    :param stft: Short Time Fourier Transform of the audio, shape [freq_bins, frames].
+    :param sr: Sample rate of the audio.
+    :return: List of AudioInfo objects for each frame."""
     freqs = np.linspace(0, sr // 2, stft.shape[0])
     max_freq = freqs[-1]
     freq_weights = 1.0 - (freqs / max_freq) ** LOWER_FREQ_WEIGHT_FUNC_EXPONENT
