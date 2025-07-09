@@ -5,18 +5,13 @@ from constants import PORTR_SCALE, HEIGHT, WIDTH, SEGMENTS, PORTR_VARIABILITY
 def create_shape(radius: float, avg_freq: float, angle: float, portr_num: int, ctx: moderngl.Context, prog: moderngl.Program) -> moderngl.VertexArray:
     """
     Creates a vertex array object (VAO) representing a circular shape with optional portrusions and rotation.
-    Parameters:
-        avg_freq (float): Determines the spikiness or frequency-based deformation of the shape.
-        angle (float): The rotation angle (in radians) to apply to the shape.
-        pert_num (int): The number of portrusions to apply to the outer edge of the shape.
-        ctx (moderngl.Context): The ModernGL context used to create buffers and VAOs.
-        prog (moderngl.Program): The shader program to use for rendering the shape.
-    Returns:
-        moderngl.VertexArray: A vertex array object representing the generated shape.
-    Notes:
-        - The shape is constructed as a triangle fan, starting from the center.
-        - The circle geometry is corrected for aspect ratio using HEIGHT and WIDTH.
-        - The function assumes the existence of global variables SEGMENTS, HEIGHT, WIDTH, and circle_prog.
+    :param radius: Base radius of the circle.
+    :param avg_freq: Average frequency used to scale protrusions.
+    :param angle: Angle in radians to rotate the shape.
+    :param portr_num: Number of protrusions to create.
+    :param ctx: ModernGL context.
+    :param prog: ModernGL shader program.
+    :return: A ModernGL VertexArray object containing the circle geometry.
     """
     # Create circle geometry (triangle fan)
     vertices = []
