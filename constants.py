@@ -1,8 +1,8 @@
-AUDIO_FILE = 'input/spooky_beat.mp3'
-FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
+AUDIO_FILE = 'input/halogen.mp3'
+FINAL_VIDEO_FILE = 'output/halogen.mp4'
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
 WIDTH, HEIGHT = 1920, 1080
-DURATION = 80  # in seconds
+DURATION = 100  # in seconds
 FPS = 30
 
 # === Audio settings ===
@@ -19,6 +19,7 @@ PORTRUSION_SCALE = 0.60  # Factor to normalize protrusion in the shape
 PERTURBATION_MAX_AMOUNT = 10 # This also generally influences the amount perturbations, useless if USE_FIXED_PERT_NUM = True
 SEGMENTS = 400  # Number of segments in the shape
 PORTRUSION_VARIABILITY = 2.0 # Variability factor for protrusion lengths
+BACKGROUND_SPEED = 1 # Speed of background colors
 
 # Asymmetric EMA settings
 ALPHA_UP_COLOR = 0.4   
@@ -29,7 +30,9 @@ ALPHA_UP_AVG_FREQ = 0.6
 ALPHA_DOWN_AVG_FREQ = 0.10
 ALPHA_UP_NUM_PERT = 0.2 # Does nothing if USE_FIXED_PERT_NUM = True
 ALPHA_DOWN_NUM_PERT = 0.2 # Does nothing if USE_FIXED_PERT_NUM = True
+ALPHA_UP_BG_SPEED = 0.4
+ALPHA_DOWN_BG_SPEED = 0.05
 
 # Static perturbation number
 USE_FIXED_PERT_NUM = True
-FIXED_PERT_NUM = 10
+FIXED_PERT_NUM = 6
