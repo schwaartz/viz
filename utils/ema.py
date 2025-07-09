@@ -1,5 +1,6 @@
 import numpy as np
 
+# No longer in use at the moment
 def apply_background_color_asymmetric_ema(prev: np.ndarray, new: np.ndarray, alpha_up: float, alpha_down: float) -> np.ndarray: 
     """ Apply asymmetric EMA to background color.
     :param prev: Previous background color.
