@@ -1,5 +1,5 @@
-AUDIO_FILE = 'input/halogen.mp3'
-FINAL_VIDEO_FILE = 'output/halogen.mp4'
+AUDIO_FILE = 'input/spooky_beat.mp3'
+FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
 WIDTH, HEIGHT = 1920, 1080
 DURATION = 80  # in seconds
@@ -12,13 +12,13 @@ LOWER_FREQ_WEIGHT_FUNC_EXPONENT = 0.2 # The lower, the higher the weight of lowe
 # === Visual settings ===
 
 # Shape and animation
-RPM = 400 # Revolutions per minute for the spinning animation
+RPM = 500 # Revolutions per minute for the spinning animation
 CIRCLE_BASE_SIZE = 0.05  # Base size of the circle
 CIRCLE_SCALE_FACTOR = 0.35  # Scale factor for circle size based on loud
 PORTRUSION_SCALE = 0.60  # Factor to normalize protrusion in the shape 
 PERTURBATION_MAX_AMOUNT = 10 # This also generally influences the amount perturbations, useless if USE_FIXED_PERT_NUM = True
 SEGMENTS = 400  # Number of segments in the shape
-PORTRUSION_VARIABILITY = 2.5 # Variability factor for protrusion lengths
+PORTRUSION_VARIABILITY = 2.0 # Variability factor for protrusion lengths
 
 # Asymmetric EMA settings
 ALPHA_UP_COLOR = 0.4   
