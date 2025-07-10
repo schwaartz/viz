@@ -4,9 +4,10 @@ import imageio
 import subprocess
 import os
 import time
-from constants import *
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
+
+from constants import *
 from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_asymmetric_ema
@@ -122,9 +123,9 @@ with Progress(
         for wave in active_waves.copy():
             dynamic_speed = BASE_WAVE_SPEED + curr_info.loudness * WAVE_SPEED_MULTIPLIER
             wave['radius'] += dynamic_speed
-            if wave['radius'] > WAVE_REMOVAL_RADIUS:
+            if wave['radius'] > WAVE_REMOVAL_RADIUS and len(active_waves) > 1:
                 active_waves.remove(wave)
-        
+
         # Keep only the most recent waves (performance optimization)
         if len(active_waves) > MAX_WAVES:
             active_waves = active_waves[-MAX_WAVES:]
@@ -182,6 +183,8 @@ render_loop_duration = time.time() - render_loop_start
 
 # ==== Combine with audio ====
 ffmpeg_start = time.time()
+console.print("\n")
+console.log("Combining video with audio using FFmpeg")
 process = subprocess.Popen([
     'ffmpeg',
     '-y',
@@ -193,6 +196,7 @@ process = subprocess.Popen([
     '-shortest',
     FINAL_VIDEO_FILE
 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+process.communicate() # Wait for process to finish
 ffmpeg_duration = time.time() - ffmpeg_start
 
 os.remove(TEMP_VIDEO_FILE)

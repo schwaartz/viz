@@ -1,9 +1,9 @@
-AUDIO_FILE = 'input/faster.mp3'
-FINAL_VIDEO_FILE = 'output/faster.mp4'
+AUDIO_FILE = 'input/spooky_beat.mp3'
+FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
-WIDTH, HEIGHT = 1920, 1088 # 1088 otherwise FFMPEG complains
-DURATION = 35  # in seconds
-FPS = 30
+WIDTH, HEIGHT = 1920, 1088
+DURATION = 15  # in seconds
+FPS = 45
 
 # === Audio settings ===
 NUM_FREQ = 128

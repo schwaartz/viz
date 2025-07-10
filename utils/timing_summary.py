@@ -38,7 +38,6 @@ def print_timing_summary(console: Console, audio_duration: float,
     table.add_row("Total", 
                 f"{total_time:.2f}", 
                 "100%")
-    console.print("\n")
     console.log(f"Rendered {DURATION} seconds of video at {FPS} FPS ({FPS*DURATION} frames)")
     console.log(f"Final video with audio saved as [bold][underlined]{FINAL_VIDEO_FILE}[/underlined][/bold]")
     console.print("\n", table, "\n")
