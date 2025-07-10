@@ -8,6 +8,7 @@ uniform float protr_thickness_factor; // Factor to scale protrusion thickness
 uniform float height_width_ratio; // Height to width ratio
 uniform float rotation; // Angle of rotation
 uniform float radius_scale; // Scale factor for the radius 
+uniform float protr_variability; // Variability factor for protrusion lengths
 
 void main() {
     float x = in_pos.x * (1.0 + radius_scale);
@@ -20,10 +21,10 @@ void main() {
     float radius = length(vec2(x, y)); 
     float total_protr = 0.0;
     if (protr_amount > 0.0) {
-        float protr_size = protr_scale * avg_freq;
+        float protr_size = protr_scale * pow(avg_freq, protr_variability);
         float power = protr_base_thickness + protr_thickness_factor * avg_freq;
-        float portr = protr_size * pow((sin(protr_amount * theta + rotation) + 1.0) / 2.0, power);
-        total_protr += portr;
+        float protr = protr_size * pow((sin(protr_amount * theta + rotation) + 1.0) / 2.0, power);
+        total_protr += protr;
     }
     x = (radius + total_protr) * cos(theta);
     y = (radius + total_protr) * sin(theta);

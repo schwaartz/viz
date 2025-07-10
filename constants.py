@@ -15,9 +15,9 @@ RPM = 600 # Revolutions per minute for the spinning animation
 CIRCLE_BASE_SIZE = 0.06  # Base size of the circle
 CIRCLE_SCALE_FACTOR = 3.3  # Scale factor for circle size based on loud
 PROTR_SCALE = 0.25  # Factor to normalize protrusion in the shape 
-PORTR_AMOUNT = 6 # This also generally influences the amount portrusions
+PROTR_AMOUNT = 6 # This also generally influences the amount protrusions
 VERTECES = 1000  # Number of verteces in the shape
-PORTR_VARIABILITY = 3 # Variability factor for protrusion lengths
+PROTR_VARIABILITY = 2.2 # Variability factor for protrusion lengths
 PROTR_BASE_THINNESS = 0.01 # Base thickness of protrusions
 PROTR_THICKENING_FACTOR = 3.5 # Factor to scale protrusion thickness based on the frequency of the sound
 
@@ -40,7 +40,3 @@ ALPHA_UP_BG_SPEED = 0.4
 ALPHA_DOWN_BG_SPEED = 0.05
 ALPHA_UP_PROTR = 0.4
 ALPHA_DOWN_PROTR = 0.05
-
-# Static portrusion number
-USE_FIXED_PORTR_NUM = True
-FIXED_PORTR_NUM = 6

@@ -8,7 +8,6 @@ from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_asymmetric_ema
 from utils.load_shader import load_shader_program
-from utils.portrusion_max import max_protrusion_array, max_protrusion_amount
 from constants import *
 
 
@@ -19,8 +18,9 @@ shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag'
 shape_prog['protr_base_thickness'].value = PROTR_BASE_THINNESS 
 shape_prog['protr_thickness_factor'].value = PROTR_THICKENING_FACTOR  
 shape_prog['height_width_ratio'].value = HEIGHT / WIDTH
-shape_prog['protr_amount'].value = PORTR_AMOUNT
+shape_prog['protr_amount'].value = PROTR_AMOUNT
 shape_prog['protr_scale'].value = PROTR_SCALE
+shape_prog['protr_variability'].value = PROTR_VARIABILITY
 bg_wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
 
 # Create fullscreen quad for wave rendering
