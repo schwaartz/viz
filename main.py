@@ -73,8 +73,6 @@ prev_avg_freq = 0.0
 prev_brightness = 1.0
 prev_color = np.array([0.0, 0.0, 0.0])
 
-total_frames = DURATION * FPS
-
 with Progress(
     TextColumn("{task.description}"),
     BarColumn(),
@@ -87,9 +85,9 @@ with Progress(
     TimeRemainingColumn(),
     console=Console()
 ) as progress:
-    render_task = progress.add_task("Rendering and storing frames", total=total_frames)
+    render_task = progress.add_task("Rendering and storing frames", total=len(audio_info))
     
-    for frame in range(total_frames):
+    for frame in range(len(audio_info)):
         curr_info: AudioInfo = audio_info[frame]
         current_color = np.array(curr_info.color)
         color_diff = np.linalg.norm(current_color - prev_color)
@@ -101,7 +99,7 @@ with Progress(
         prev_radius_scaler = radius_scaler
 
         # Determine the rotation 
-        rotations_per_frame = curr_info.loudness * RPM / (60 * FPS)
+        rotations_per_frame = curr_info.loudness * RPM_MULTIPLIER / (60 * FPS)
         curr_rotation = curr_rotation + rotations_per_frame * 2 * np.pi
 
         # Determine the average frequency
@@ -209,5 +207,6 @@ print_timing_summary(
     render_loop_duration,
     ffmpeg_duration,
     total_rendering_time,
-    total_writing_time
+    total_writing_time,
+    len(audio_info)
 )
