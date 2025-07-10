@@ -1,6 +1,6 @@
 import librosa
 import numpy as np
-from constants import AUDIO_FILE, FPS, DURATION, NUM_FREQ, LOWER_FREQ_WEIGHT_FUNC_EXPONENT
+from constants import *
 import colorsys
 
 def short_time_fourrier_transform() -> np.ndarray:
@@ -19,7 +19,7 @@ class AudioInfo:
     """
     Class to hold audio information for a specific frame.
     """
-    def __init__(self, loudness, avg_freq, color):
+    def __init__(self, loudness: float, avg_freq: float, color: tuple):
         self.loudness = loudness
         self.avg_freq = avg_freq
         self.color = color

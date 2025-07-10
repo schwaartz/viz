@@ -4,7 +4,7 @@ import imageio
 import subprocess
 import os
 import time
-from visuals.create_shape import create_shape
+from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_asymmetric_ema
 from utils.load_shader import load_shader_program
@@ -15,6 +15,12 @@ from constants import *
 ctx = moderngl.create_context(standalone=True)
 writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
+shape_prog['protr_base_thickness'].value = PROTR_BASE_THINNESS 
+shape_prog['protr_thickness_factor'].value = PROTR_THICKENING_FACTOR  
+shape_prog['height_width_ratio'].value = HEIGHT / WIDTH
+shape_prog['protr_amount'].value = PROTR_AMOUNT
+shape_prog['protr_scale'].value = PROTR_SCALE
+shape_prog['protr_variability'].value = PROTR_VARIABILITY
 bg_wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
 
 # Create fullscreen quad for wave rendering
@@ -26,6 +32,7 @@ bg_quad_vertices = np.array([
 ], dtype='f4')
 bg_quad_vbo = ctx.buffer(bg_quad_vertices.tobytes())
 bg_quad_vao = ctx.simple_vertex_array(bg_wave_prog, bg_quad_vbo, 'in_pos')
+shape_vao = create_circle(CIRCLE_BASE_SIZE, ctx, shape_prog)
 
 fbo = ctx.simple_framebuffer((WIDTH, HEIGHT)) # framebuffer object
 fbo.use()
@@ -40,15 +47,16 @@ audio_end = time.time()
 
 
 # ==== Render Loop ====
-print("Starting rendering...")
-render_start = time.time()
+print("Starting render loop...")
+render_loop_start = time.time()
+total_rendering_time = 0.0
+tota_writing_time = 0.0
 
 frame_since_last_wave = 0
 active_waves = []
 curr_rotation = 0.0 
-prev_radius = 0.0
+prev_radius_scaler = 0.0
 prev_avg_freq = 0.0
-prev_portr_num_float = 0.0
 prev_brightness = 1.0
 prev_color = np.array([0.0, 0.0, 0.0])
 
@@ -59,9 +67,9 @@ for frame in range(DURATION * FPS):
     frame_since_last_wave += 1
     
     # Determine the size based on loudness
-    new_radius = CIRCLE_BASE_SIZE + curr_info.loudness * CIRCLE_SCALE_FACTOR
-    radius = apply_asymmetric_ema(prev_radius, new_radius, ALPHA_UP_RADIUS, ALPHA_DOWN_RADIUS)
-    prev_radius = radius
+    new_radius_scaler = curr_info.loudness * CIRCLE_SCALE_FACTOR
+    radius_scaler = apply_asymmetric_ema(prev_radius_scaler, new_radius_scaler, ALPHA_UP_RADIUS, ALPHA_DOWN_RADIUS)
+    prev_radius_scaler = radius_scaler
 
     # Determine the rotation 
     rotations_per_frame = curr_info.loudness * RPM / (60 * FPS)
@@ -71,14 +79,6 @@ for frame in range(DURATION * FPS):
     new_avg_freq = curr_info.avg_freq
     avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
     prev_avg_freq = avg_freq
-
-    # Determine the number of portrusions
-    if USE_FIXED_PORTR_NUM:
-        portr_num_float = FIXED_PORTR_NUM
-    else:
-        new_portr_num_float = avg_freq * PORTR_MAX_AMOUNT
-        portr_num_float = apply_asymmetric_ema(prev_portr_num_float, new_portr_num_float, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
-        prev_portr_num_float = portr_num_float
 
     # Check if new wave should spawn
     if (frame == 0 or color_diff > COLOR_CHANGE_THRESHOLD or
@@ -118,27 +118,36 @@ for frame in range(DURATION * FPS):
     while len(wave_radii) < MAX_WAVES:
         wave_radii.append(0.0)
     
-    # Set shader uniforms
+    # Set shader uniforms for the waves
     bg_wave_prog['wave_colors'].value = wave_colors
     bg_wave_prog['wave_radii'].value = wave_radii
     bg_wave_prog['num_waves'].value = len(active_waves)
     bg_wave_prog['wave_thickness'].value = WAVE_THICKNESS
     bg_wave_prog['brightness'].value = BRIGHTNESS
-    
-    # Render wave background
-    bg_quad_vao.render(moderngl.TRIANGLE_FAN)
 
-    # Create and render the shape
-    shape_vao = create_shape(radius, avg_freq, curr_rotation, int(portr_num_float), ctx, prog=shape_prog)
+    # Set the shader uniforms for the shape
+    shape_prog['rotation'].value = curr_rotation
+    shape_prog['radius_scale'].value = radius_scaler
+    shape_prog['avg_freq'].value = avg_freq
+
+    # Render the waves and the shape
+    render_start = time.time()
+    bg_quad_vao.render(moderngl.TRIANGLE_FAN)
     shape_vao.render(moderngl.TRIANGLE_FAN)
+    render_end = time.time()
+    total_rendering_time += render_end - render_start
 
     # Read framebuffer and save to video
     pixels = fbo.read(components=3, alignment=1)
     image = np.frombuffer(pixels, dtype=np.uint8).reshape((HEIGHT, WIDTH, 3))
+    write_start = time.time()
     writer.append_data(np.flip(image, axis=0))  # flip Y-axis
+    write_end = time.time()
+    tota_writing_time += write_end - write_start
+
 
 writer.close()
-render_end = time.time()
+render_loop_end = time.time()
 
 
 # ==== Combine with audio ====
@@ -163,7 +172,9 @@ total_time = ffmpeg_end - audio_start
 print(f"\nTIMING SUMMARY")
 print(f"To render a total of {DURATION} seconds of video at {FPS} FPS ({DURATION * FPS} frames):")
 print(f" - Audio processing: {audio_end - audio_start:.2f}s ({((audio_end - audio_start) / total_time * 100):.1f}%)")
-print(f" - Rendering:        {render_end - render_start:.2f}s ({((render_end - render_start) / total_time * 100):.1f}%)")
+print(f" - Render Loop:        {render_loop_end - render_loop_start:.2f}s ({((render_loop_end - render_loop_start) / total_time * 100):.1f}%)")
+print(f"   - Ttime spend rendering frames: {total_rendering_time:.2f}s ({(total_rendering_time / (render_loop_end - render_loop_start) * 100):.1f}%)")
+print(f"   - Time spend writing frames to disk:   {tota_writing_time:.2f}s ({(tota_writing_time / (render_loop_end - render_loop_start) * 100):.1f}%)")
 print(f" - FFmpeg:           {ffmpeg_end - ffmpeg_start:.2f}s ({((ffmpeg_end - ffmpeg_start) / total_time * 100):.1f}%)")
 print(f" - Total:            {total_time:.2f}s")
 print(f"\nFinal video with audio saved as {FINAL_VIDEO_FILE}")
