@@ -8,7 +8,7 @@ from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_asymmetric_ema
 from utils.load_shader import load_shader_program
-from utils.portrusion_max import hardmax_protrusion_array
+from utils.portrusion_max import max_protrusion_array, max_protrusion_amount
 from constants import *
 
 
@@ -16,10 +16,11 @@ from constants import *
 ctx = moderngl.create_context(standalone=True)
 writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
-shape_prog['protr_base_thickness'].value = PROTR_BASE_THICKNESS 
-shape_prog['protr_thickness_factor'].value = PROTR_THICKNESS_FACTOR  
-shape_prog['protr_scale'].value = PORTR_SCALE
-shape_prog['height_width_ratio'].value = HEIGHT / WIDTH 
+shape_prog['protr_base_thickness'].value = PROTR_BASE_THINNESS 
+shape_prog['protr_thickness_factor'].value = PROTR_THICKENING_FACTOR  
+shape_prog['height_width_ratio'].value = HEIGHT / WIDTH
+shape_prog['protr_amount'].value = PORTR_AMOUNT
+shape_prog['protr_scale'].value = PROTR_SCALE
 bg_wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
 
 # Create fullscreen quad for wave rendering
@@ -56,9 +57,7 @@ active_waves = []
 curr_rotation = 0.0 
 prev_radius_scaler = 0.0
 prev_avg_freq = 0.0
-prev_portr_num_float = 0.0
 prev_brightness = 1.0
-prev_protrs_amounts = [[MIN_PROTRUSIONS + i, 0.0] for i in range(MAX_ACTIVE_PROTRUSIONS)]
 prev_color = np.array([0.0, 0.0, 0.0])
 
 for frame in range(DURATION * FPS):
@@ -80,14 +79,6 @@ for frame in range(DURATION * FPS):
     new_avg_freq = curr_info.avg_freq
     avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
     prev_avg_freq = avg_freq
-
-    # Determine the protrusions
-    protrusions: list[list[float]] = curr_info.protrusions
-    for i, new_protr in enumerate(protrusions):
-        protr = apply_asymmetric_ema(
-            prev_protrs_amounts[i][1], new_protr[1], ALPHA_UP_PROTR, ALPHA_DOWN_PROTR)
-        protrusions[i][1] = protr
-    prev_protrs_amounts = protrusions.copy()
 
     # Check if new wave should spawn
     if (frame == 0 or color_diff > COLOR_CHANGE_THRESHOLD or
@@ -135,9 +126,9 @@ for frame in range(DURATION * FPS):
     bg_wave_prog['brightness'].value = BRIGHTNESS
 
     # Set the shader uniforms for the shape
-    shape_prog['protrusions'].value = hardmax_protrusion_array(protrusions)
     shape_prog['rotation'].value = curr_rotation
     shape_prog['radius_scale'].value = radius_scaler
+    shape_prog['avg_freq'].value = avg_freq
 
     # Render the waves and the shape
     render_start = time.time()

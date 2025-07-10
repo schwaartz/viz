@@ -1,6 +1,6 @@
 import numpy as np
 import moderngl
-from constants import PORTR_SCALE, HEIGHT, WIDTH, VERTECES, PORTR_VARIABILITY
+from constants import PROTR_SCALE, HEIGHT, WIDTH, VERTECES, PORTR_VARIABILITY
 
 def create_circle(radius: float, ctx: moderngl.Context, prog: moderngl.Program) -> moderngl.VertexArray:
     """

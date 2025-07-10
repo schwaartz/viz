@@ -19,11 +19,10 @@ class AudioInfo:
     """
     Class to hold audio information for a specific frame.
     """
-    def __init__(self, loudness: float, avg_freq: float, color: tuple, protrusions: list):
+    def __init__(self, loudness: float, avg_freq: float, color: tuple):
         self.loudness = loudness
         self.avg_freq = avg_freq
         self.color = color
-        self.protrusions = protrusions
 
 def frequency_to_color(ratio: float) -> tuple:
     """
@@ -36,31 +35,6 @@ def frequency_to_color(ratio: float) -> tuple:
     r, g, b = colorsys.hsv_to_rgb(hue, 1, 1)
     return (r, g, b)
 
-def get_protrusion_array(stft: np.ndarray) -> np.ndarray:
-    """
-    Compute protrusion array based on the STFT.
-    The protrusions are caculated by dividing the STFT values into MAX_ACTIVE_PROTRUSIONS bands of frequencies
-    and then calculating the loudness for each band. Then, at the end, the size for each protrusion band is normalized.
-    :param stft: Short Time Fourier Transform of the audio, shape [freq_bins, frames].
-    :return: Protrusion array, shape [frames, MAX_ACTIVE_PROTRUSIONS].
-    """
-    protrusion_arr = np.zeros((stft.shape[1], MAX_ACTIVE_PROTRUSIONS))
-    for i in range(stft.shape[1]):
-        band_size = stft.shape[0] // MAX_ACTIVE_PROTRUSIONS
-        for j in range(MAX_ACTIVE_PROTRUSIONS):
-            start = j * band_size
-            end = (j + 1) * band_size if j <= MAX_ACTIVE_PROTRUSIONS else stft.shape[0]
-            protrusion_arr[i, j] = np.sum(stft[start:end, i])
-
-    # Normalize protrusions
-    min_arr = protrusion_arr.min(axis=0) # Sum over all the frames
-    max_arr = protrusion_arr.max(axis=0) # Sum over all the frames
-    protrusion_arr = (protrusion_arr - min_arr) / (max_arr - min_arr + 1e-8)
-    protrusion_arr = protrusion_arr * PORTR_SCALE  # Scale protrusions
-    return protrusion_arr
-        
-
-
 def get_audio_info(stft: np.ndarray, sr: int) -> list:
     """
     Compute AudioInfo for all frames, with normalization.
@@ -72,7 +46,6 @@ def get_audio_info(stft: np.ndarray, sr: int) -> list:
     freq_weights = 1.0 - (freqs / max_freq) ** LOWER_FREQ_WEIGHT_FUNC_EXPONENT
     loudness_arr = np.sum(stft * freq_weights[:, None], axis=0)
     avg_freq_arr = np.sum(freqs[:, None] * stft, axis=0) / (np.sum(stft, axis=0) + 1e-8)
-    portr_arr = get_protrusion_array(stft)
 
     # Normalize loudness and avg_freq
     loudness_min, loudness_max = loudness_arr.min(), loudness_arr.max()
@@ -83,6 +56,5 @@ def get_audio_info(stft: np.ndarray, sr: int) -> list:
     infos = []
     for i in range(stft.shape[1]):
         color = frequency_to_color(avg_freq_norm[i])
-        prortr_list = [[MIN_PROTRUSIONS + j, portr_arr[i, j]] for j in range(MAX_ACTIVE_PROTRUSIONS)]
-        infos.append(AudioInfo(loudness_norm[i], avg_freq_norm[i], color, prortr_list))
+        infos.append(AudioInfo(loudness_norm[i], avg_freq_norm[i], color))
     return infos
