@@ -4,6 +4,8 @@ import imageio
 import subprocess
 import os
 import time
+import pygame
+from pygame.locals import *
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 
@@ -20,8 +22,15 @@ console = Console()
 console.log("Starting program")
 
 
+# ==== Initialize Pygame with OpenGL ====
+pygame.init()
+pygame.display.set_mode((WIDTH, HEIGHT), DOUBLEBUF | OPENGL)
+pygame.display.set_caption("Audio Visualizer - Live Preview")
+
+
 # ==== Visuals ====
-ctx = moderngl.create_context(standalone=True)
+# Create ModernGL context from pygame's OpenGL context
+ctx = moderngl.create_context()
 writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
 
 shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
@@ -43,17 +52,15 @@ bg_quad_vbo = ctx.buffer(bg_quad_vertices.tobytes())
 bg_quad_vao = ctx.simple_vertex_array(bg_wave_prog, bg_quad_vbo, 'in_pos')
 shape_vao = create_circle(CIRCLE_BASE_SIZE, ctx, shape_prog)
 
+# Create framebuffer for video output
 fbo = ctx.simple_framebuffer((WIDTH, HEIGHT))
-fbo.use()
 
 
 # ==== Audio ====
-# STFT calculation
 console.log(f"Processing audio file [bold]{AUDIO_FILE}[/bold]")
 audio_start = time.time()
 stft = short_time_fourrier_transform()
 
-# Info extraction from STFT
 console.log("Extracting audio information")
 audio_info = get_audio_info(stft, NUM_FREQ)
 audio_duration = time.time() - audio_start
@@ -88,26 +95,29 @@ with Progress(
     render_task = progress.add_task("Rendering and storing frames", total=len(audio_info))
     
     for frame in range(len(audio_info)):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+        
         curr_info: AudioInfo = audio_info[frame]
         current_color = np.array(curr_info.color)
         color_diff = np.linalg.norm(current_color - prev_color)
         frame_since_last_wave += 1
         
-        # Determine the size based on loudness
+        # Calculate values
         new_radius_scaler = curr_info.loudness * CIRCLE_SCALE_FACTOR
         radius_scaler = apply_asymmetric_ema(prev_radius_scaler, new_radius_scaler, ALPHA_UP_RADIUS, ALPHA_DOWN_RADIUS)
         prev_radius_scaler = radius_scaler
 
-        # Determine the rotation 
         rotations_per_frame = curr_info.loudness * RPM_MULTIPLIER / (60 * FPS)
         curr_rotation = curr_rotation + rotations_per_frame * 2 * np.pi
 
-        # Determine the average frequency
         new_avg_freq = curr_info.avg_freq
         avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
         prev_avg_freq = avg_freq
 
-        # Check if new wave should spawn
+        # Wave spawning logic
         if (frame == 0 or color_diff > COLOR_CHANGE_THRESHOLD or
             frame_since_last_wave > MAX_FRAMES_BETWEEN_WAVES or len(active_waves) == 0):
             active_waves.append({
@@ -115,66 +125,68 @@ with Progress(
                 'radius': 0.0
             })
             prev_color = current_color.copy()
-            frame_since_last_wave = 0  # Reset counter
-        
-        # Update all active waves
+            frame_since_last_wave = 0
+
+        # Update waves
         for wave in active_waves.copy():
             dynamic_speed = BASE_WAVE_SPEED + curr_info.loudness * WAVE_SPEED_MULTIPLIER
             wave['radius'] += dynamic_speed
             if wave['radius'] > WAVE_REMOVAL_RADIUS and len(active_waves) > 1:
                 active_waves.remove(wave)
 
-        # Keep only the most recent waves (performance optimization)
         if len(active_waves) > MAX_WAVES:
             active_waves = active_waves[-MAX_WAVES:]
         
-        # Clear framebuffer
-        fbo.clear(0.0, 0.0, 0.0, 1.0)
-        
-        # Prepare wave data for shader
+        # Prepare wave data
         wave_colors = []
         wave_radii = []
         
         for wave in active_waves:
-            wave_colors.append(wave['color']) # vec3
-            wave_radii.append(wave['radius']) # float
+            wave_colors.append(wave['color'])
+            wave_radii.append(wave['radius'])
         
-        # Pad arrays to buffer size
         while len(wave_colors) < MAX_WAVES:
             wave_colors.append([0.0, 0.0, 0.0])
         while len(wave_radii) < MAX_WAVES:
             wave_radii.append(0.0)
         
-        # Set shader uniforms for the waves
+        # Set uniforms
         bg_wave_prog['wave_colors'].value = wave_colors
         bg_wave_prog['wave_radii'].value = wave_radii
         bg_wave_prog['num_waves'].value = len(active_waves)
         bg_wave_prog['wave_thickness'].value = WAVE_THICKNESS
         bg_wave_prog['brightness'].value = BRIGHTNESS
 
-        # Set the shader uniforms for the shape
         shape_prog['rotation'].value = curr_rotation
         shape_prog['radius_scale'].value = radius_scaler
         shape_prog['avg_freq'].value = avg_freq
 
-        # Render the waves and the shape
+        # Render to BOTH screen and framebuffer
         render_start = time.time()
+        ctx.screen.use()
+        ctx.clear(0.0, 0.0, 0.0, 1.0)
+        bg_quad_vao.render(moderngl.TRIANGLE_FAN)
+        shape_vao.render(moderngl.TRIANGLE_FAN)
+        
+        fbo.use()
+        fbo.clear(0.0, 0.0, 0.0, 1.0)
         bg_quad_vao.render(moderngl.TRIANGLE_FAN)
         shape_vao.render(moderngl.TRIANGLE_FAN)
         render_duration = time.time() - render_start
         total_rendering_time += render_duration
 
-        # Read framebuffer and save to video
+        pygame.display.flip()
+
         pixels = fbo.read(components=3, alignment=1)
         image = np.frombuffer(pixels, dtype=np.uint8).reshape((HEIGHT, WIDTH, 3))
         write_start = time.time()
-        writer.append_data(np.flip(image, axis=0))  # flip Y-axis
+        writer.append_data(np.flip(image, axis=0))
         write_duration = time.time() - write_start
         total_writing_time += write_duration
-        
-        # Update progress
+
         progress.update(render_task, advance=1)
 
+pygame.quit()
 writer.close()
 render_loop_duration = time.time() - render_loop_start
 
@@ -194,7 +206,7 @@ process = subprocess.Popen([
     '-shortest',
     FINAL_VIDEO_FILE
 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-process.communicate() # Wait for process to finish
+process.communicate()
 ffmpeg_duration = time.time() - ffmpeg_start
 
 os.remove(TEMP_VIDEO_FILE)

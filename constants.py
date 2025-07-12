@@ -1,6 +1,6 @@
 # === General Constants ===
-AUDIO_FILE = 'input/spooky_beat.mp3'
-FINAL_VIDEO_FILE = 'output/spooky_beat.mp4'
+AUDIO_FILE = 'input/outlaw.mp3'
+FINAL_VIDEO_FILE = 'output/outlaw.mp4'
 TEMP_VIDEO_FILE = 'temp/temp_video.mp4'
 WIDTH, HEIGHT = 1920, 1088
 DURATION = 200  # in seconds
