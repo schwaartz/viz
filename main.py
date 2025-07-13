@@ -4,10 +4,12 @@ import imageio
 import subprocess
 import os
 import time
-import pygame
-from pygame.locals import *
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
+
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
+from pygame.locals import *
 
 from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
@@ -15,14 +17,13 @@ from utils.ema import apply_asymmetric_ema
 from utils.load_shader import load_shader_program
 from utils.timing_summary import print_timing_summary
 from config import VisualConfig, load_config
-
+from utils.argument_parser import parse_arguments
 
 # ==== Config ====
+args = parse_arguments()
 console = Console()
 console.log("Starting program")
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
 config: VisualConfig = load_config(console=console)
-
 
 # ==== Initialize Pygame with OpenGL ====
 pygame.init()
@@ -59,9 +60,9 @@ fbo = ctx.simple_framebuffer((config.width, config.height))
 
 
 # ==== Audio ====
-console.log(f"Processing audio file [bold]{config.audio_file}[/bold]")
+console.log(f"Processing audio file [bold]{args.input_audio}[/bold]")
 audio_start = time.time()
-stft = short_time_fourrier_transform(config)
+stft = short_time_fourrier_transform(args.input_audio, config)
 
 console.log("Extracting audio information")
 audio_info = get_audio_info(stft, config)
@@ -163,18 +164,19 @@ with Progress(
         shape_prog['radius_scale'].value = radius_scaler
         shape_prog['avg_freq'].value = avg_freq
 
-        # Render to BOTH screen and framebuffer
-        render_start = time.time()
-
         # Only render every 10th frame to reduce load (for preview)
         if frame % 10 == 0:
             ctx.screen.use()
             ctx.clear(0.0, 0.0, 0.0, 1.0)
+            render_start = time.time()
             bg_quad_vao.render(moderngl.TRIANGLE_FAN)
             shape_vao.render(moderngl.TRIANGLE_FAN)
+            render_duration = time.time() - render_start
+            total_rendering_time += render_duration
         
         fbo.use()
         fbo.clear(0.0, 0.0, 0.0, 1.0)
+        render_start = time.time()
         bg_quad_vao.render(moderngl.TRIANGLE_FAN)
         shape_vao.render(moderngl.TRIANGLE_FAN)
         render_duration = time.time() - render_start
@@ -200,16 +202,17 @@ render_loop_duration = time.time() - render_loop_start
 ffmpeg_start = time.time()
 console.print("\n")
 console.log("Combining video with audio using FFmpeg")
+default_output_file = args.input_audio.replace('.mp3', '.mp4')
 process = subprocess.Popen([
     'ffmpeg',
     '-y',
     '-i', config.temp_file,
-    '-i', config.audio_file,
+    '-i', args.input_audio,
     '-c:v', 'copy',
     '-map', '0:v:0',
     '-map', '1:a:0',
     '-shortest',
-    config.output_file
+    args.output if args.output else default_output_file, 
 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 process.communicate()
 ffmpeg_duration = time.time() - ffmpeg_start

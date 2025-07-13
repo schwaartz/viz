@@ -4,13 +4,14 @@ import colorsys
 
 from config import VisualConfig
 
-def short_time_fourrier_transform(config: VisualConfig) -> np.ndarray:
+def short_time_fourrier_transform(audio_file: str, config: VisualConfig) -> np.ndarray:
     """
     Load audio file and compute its Short Time Fourier Transform (STFT).
+    :param audio_file: Path to the audio file.
     :param config: VisualConfig object with settings.
     :return: STFT of the audio file, shape [freq_bins, frames].
     """
-    y, sr = librosa.load(config.audio_file, sr=None, mono=True)
+    y, sr = librosa.load(audio_file, sr=None, mono=True)
     hop_length = int(sr / config.fps)  # frames per second
     bands = config.num_frequency_bands
     frames = config.duration * config.fps

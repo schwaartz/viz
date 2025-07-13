@@ -15,8 +15,6 @@ class VisualConfig:
     visuals will change accordingly.
     """
     # File settings
-    audio_file: str = 'input/outlaw.mp3'
-    output_file: str = 'output/outlaw.mp4'
     temp_file: str = 'temp/temp_video.mp4'
     duration: int = 200
     fps: int = 60
