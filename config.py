@@ -6,11 +6,13 @@ from rich.console import Console
 @dataclass
 class VisualConfig:
     """
-    Configuration for the audio visualizer.
-    If the names of the parameters are not clear enough, please take a look at the source code for more information.
-    Also note that some of the parameters are using in speed calculations that depend on the FPS. Therefore this class
-    has a method to rescale the constants based on the actual FPS. If this function is not called when the FPS is changed
-    (from the default of 30), the speed of the visuals will change accordingly.
+    Configuration for the audio visualizer. If the names of the parameters are
+    not clear enough, please take a look at the source code for more
+    information. Also note that some of the parameters are using in speed
+    calculations that depend on the FPS. Therefore this class has a method to
+    rescale the constants based on the actual FPS. If this function is not
+    called when the FPS is changed (from the default of 30), the speed of the
+    visuals will change accordingly.
     """
     # File settings
     audio_file: str = 'input/outlaw.mp3'
@@ -55,10 +57,12 @@ class VisualConfig:
     freq_band_weight_func_exponent: float = 0.2 # lower value = higher weight for lower freq
 
     def rescale_constants_based_on_fps(self):
-        """Rescale constants based on the actual FPS.
-        This is because many calculations depend on the amount of frames.
-        The base FPS is used to scale the constants, so that the speed of the
-        visuals remains consistent regardless of the FPS."""
+        """
+        Rescale constants based on the actual FPS. This is because many
+        calculations depend on the amount of frames. The base FPS is used to
+        scale the constants, so that the speed of the visuals remains consistent
+        regardless of the FPS.
+        """
         base_fps = 30
         scaling_factor = base_fps / self.fps
         self.rotation_speed *= scaling_factor
@@ -97,8 +101,10 @@ def load_config(config_file: str = 'config.json', console: Console = None) -> Vi
     return config
 
 def save_config(config: VisualConfig, config_file: str = 'config.json'):
-    """Save configuration to JSON file
+    """
+    Save configuration to JSON file
     :param config: VisualConfig object to save.
-    :param config_file: Path where to save the configuration."""
+    :param config_file: Path where to save the configuration.
+    """
     with open(config_file, 'w') as f:
         json.dump(asdict(config), f, indent=2)
