@@ -1,5 +1,6 @@
 import numpy as np
 
+# NOTE: Not in use at the moment, but might be useful later
 def sigmoid(x: float) -> float:
     """
     Computes the sigmoid function for a given input x.

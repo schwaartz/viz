@@ -5,6 +5,13 @@ from rich.console import Console
 
 @dataclass
 class VisualConfig:
+    """
+    Configuration for the audio visualizer.
+    If the names of the parameters are not clear enough, please take a look at the source code for more information.
+    Also note that some of the parameters are using in speed calculations that depend on the FPS. Therefore this class
+    has a method to rescale the constants based on the actual FPS. If this function is not called when the FPS is changed
+    (from the default of 30), the speed of the visuals will change accordingly.
+    """
     # File settings
     audio_file: str = 'input/outlaw.mp3'
     output_file: str = 'output/outlaw.mp4'
@@ -47,7 +54,7 @@ class VisualConfig:
     num_frequency_bands: int = 128
     freq_band_weight_func_exponent: float = 0.2 # lower value = higher weight for lower freq
 
-    def rescale_constants(self):
+    def rescale_constants_based_on_fps(self):
         """Rescale constants based on the actual FPS.
         This is because many calculations depend on the amount of frames.
         The base FPS is used to scale the constants, so that the speed of the
@@ -86,7 +93,7 @@ def load_config(config_file: str = 'config.json', console: Console = None) -> Vi
         save_config(config, config_file)
         if console: console.log(f"Created default config file: {config_file}")
     
-    config.rescale_constants()
+    config.rescale_constants_based_on_fps()
     return config
 
 def save_config(config: VisualConfig, config_file: str = 'config.json'):
