@@ -9,38 +9,39 @@ from pygame.locals import *
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 
-from params import *
 from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_asymmetric_ema
 from utils.load_shader import load_shader_program
 from utils.timing_summary import print_timing_summary
+from config import VisualConfig, load_config
 
 
-# ==== Pretty Printing ====
+# ==== Config ====
 console = Console()
 console.log("Starting program")
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
+config: VisualConfig = load_config(console=console)
 
 
 # ==== Initialize Pygame with OpenGL ====
 pygame.init()
-pygame.display.set_mode((WIDTH, HEIGHT), DOUBLEBUF | OPENGL)
+pygame.display.set_mode((config.width, config.height), DOUBLEBUF | OPENGL)
 pygame.display.set_caption("Audio Visualizer - Live Preview")
 
 
 # ==== Visuals ====
 # Create ModernGL context from pygame's OpenGL context
 ctx = moderngl.create_context()
-writer = imageio.get_writer(TEMP_VIDEO_FILE, fps=FPS)
+writer = imageio.get_writer(config.temp_file, fps=config.fps)
 
 shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
-shape_prog['protr_base_thickness'].value = PROTR_BASE_THINNESS 
-shape_prog['protr_thickness_factor'].value = PROTR_THICKENING_FACTOR  
-shape_prog['height_width_ratio'].value = HEIGHT / WIDTH
-shape_prog['protr_amount'].value = PROTR_AMOUNT
-shape_prog['protr_scale'].value = PROTR_SCALE
-shape_prog['protr_variability'].value = PROTR_VARIABILITY
+shape_prog['protr_base_thickness'].value = config.protrusion_base_thickness 
+shape_prog['protr_thickness_factor'].value = config.protrusion_thickening_factor  
+shape_prog['height_width_ratio'].value = config.height / config.width
+shape_prog['protr_amount'].value = config.num_protrusions
+shape_prog['protr_scale'].value = config.protrusion_scale
+shape_prog['protr_variability'].value = config.protrusion_variability
 
 bg_wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
 bg_quad_vertices = np.array([
@@ -51,19 +52,19 @@ bg_quad_vertices = np.array([
 ], dtype='f4')
 bg_quad_vbo = ctx.buffer(bg_quad_vertices.tobytes())
 bg_quad_vao = ctx.simple_vertex_array(bg_wave_prog, bg_quad_vbo, 'in_pos')
-shape_vao = create_circle(CIRCLE_BASE_SIZE, ctx, shape_prog)
+shape_vao = create_circle(ctx, shape_prog, config)
 
 # Create framebuffer for video output
-fbo = ctx.simple_framebuffer((WIDTH, HEIGHT))
+fbo = ctx.simple_framebuffer((config.width, config.height))
 
 
 # ==== Audio ====
-console.log(f"Processing audio file [bold]{AUDIO_FILE}[/bold]")
+console.log(f"Processing audio file [bold]{config.audio_file}[/bold]")
 audio_start = time.time()
-stft = short_time_fourrier_transform()
+stft = short_time_fourrier_transform(config)
 
 console.log("Extracting audio information")
-audio_info = get_audio_info(stft, NUM_FREQ)
+audio_info = get_audio_info(stft, config)
 audio_duration = time.time() - audio_start
 
 
@@ -107,20 +108,20 @@ with Progress(
         frame_since_last_wave += 1
         
         # Calculate values
-        new_radius_scaler = curr_info.loudness * CIRCLE_SCALE_FACTOR
-        radius_scaler = apply_asymmetric_ema(prev_radius_scaler, new_radius_scaler, ALPHA_UP_RADIUS, ALPHA_DOWN_RADIUS)
+        new_radius_scaler = curr_info.loudness * config.circle_loudness_scale_factor
+        radius_scaler = apply_asymmetric_ema(prev_radius_scaler, new_radius_scaler, config.alpha_up_radius, config.alpha_down_radius)
         prev_radius_scaler = radius_scaler
 
-        rotations_per_frame = curr_info.loudness * RPM_MULTIPLIER / (60 * FPS)
+        rotations_per_frame = curr_info.loudness * config.rotation_speed / (60 * config.fps)
         curr_rotation = curr_rotation + rotations_per_frame * 2 * np.pi
 
         new_avg_freq = curr_info.avg_freq
-        avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, ALPHA_UP_AVG_FREQ, ALPHA_DOWN_AVG_FREQ)
+        avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, config.alpha_up_avg_freq, config.alpha_down_avg_freq)
         prev_avg_freq = avg_freq
 
         # Wave spawning logic
-        if (frame == 0 or color_diff > COLOR_CHANGE_THRESHOLD or
-            frame_since_last_wave > MAX_FRAMES_BETWEEN_WAVES or len(active_waves) == 0):
+        if (frame == 0 or color_diff > config.color_change_threshold or
+            frame_since_last_wave > config.max_frames_between_waves or len(active_waves) == 0):
             active_waves.append({
                 'color': curr_info.color,
                 'radius': 0.0
@@ -130,13 +131,13 @@ with Progress(
 
         # Update waves
         for wave in active_waves.copy():
-            dynamic_speed = BASE_WAVE_SPEED + curr_info.loudness * WAVE_SPEED_MULTIPLIER
+            dynamic_speed = config.base_wave_speed + curr_info.loudness * config.wave_speed_loudness_scale_factor
             wave['radius'] += dynamic_speed
-            if wave['radius'] > WAVE_REMOVAL_RADIUS and len(active_waves) > 1:
+            if wave['radius'] > config.wave_removal_radius and len(active_waves) > 1:
                 active_waves.remove(wave)
 
-        if len(active_waves) > MAX_WAVES:
-            active_waves = active_waves[-MAX_WAVES:]
+        if len(active_waves) > config.max_waves:
+            active_waves = active_waves[-config.max_waves:]
         
         # Prepare wave data
         wave_colors = []
@@ -146,17 +147,17 @@ with Progress(
             wave_colors.append(wave['color'])
             wave_radii.append(wave['radius'])
         
-        while len(wave_colors) < MAX_WAVES:
+        while len(wave_colors) < config.max_waves:
             wave_colors.append([0.0, 0.0, 0.0])
-        while len(wave_radii) < MAX_WAVES:
+        while len(wave_radii) < config.max_waves:
             wave_radii.append(0.0)
         
         # Set uniforms
         bg_wave_prog['wave_colors'].value = wave_colors
         bg_wave_prog['wave_radii'].value = wave_radii
         bg_wave_prog['num_waves'].value = len(active_waves)
-        bg_wave_prog['wave_thickness'].value = WAVE_THICKNESS
-        bg_wave_prog['brightness'].value = BRIGHTNESS
+        bg_wave_prog['wave_thickness'].value = config.wave_thickness
+        bg_wave_prog['brightness'].value = config.brightness
 
         shape_prog['rotation'].value = curr_rotation
         shape_prog['radius_scale'].value = radius_scaler
@@ -182,7 +183,7 @@ with Progress(
         pygame.display.flip()
 
         pixels = fbo.read(components=3, alignment=1)
-        image = np.frombuffer(pixels, dtype=np.uint8).reshape((HEIGHT, WIDTH, 3))
+        image = np.frombuffer(pixels, dtype=np.uint8).reshape((config.height, config.width, 3))
         write_start = time.time()
         writer.append_data(np.flip(image, axis=0))
         write_duration = time.time() - write_start
@@ -202,18 +203,18 @@ console.log("Combining video with audio using FFmpeg")
 process = subprocess.Popen([
     'ffmpeg',
     '-y',
-    '-i', TEMP_VIDEO_FILE,
-    '-i', AUDIO_FILE,
+    '-i', config.temp_file,
+    '-i', config.audio_file,
     '-c:v', 'copy',
     '-map', '0:v:0',
     '-map', '1:a:0',
     '-shortest',
-    FINAL_VIDEO_FILE
+    config.output_file
 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 process.communicate()
 ffmpeg_duration = time.time() - ffmpeg_start
 
-os.remove(TEMP_VIDEO_FILE)
+os.remove(config.temp_file)
 
 
 # ==== Timing Summary ====

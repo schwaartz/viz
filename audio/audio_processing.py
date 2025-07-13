@@ -1,18 +1,22 @@
 import librosa
 import numpy as np
-from params import *
 import colorsys
 
-def short_time_fourrier_transform() -> np.ndarray:
+from config import VisualConfig
+
+def short_time_fourrier_transform(config: VisualConfig) -> np.ndarray:
     """
     Load audio file and compute its Short Time Fourier Transform (STFT).
+    :param config: VisualConfig object with settings.
     :return: STFT of the audio file, shape [freq_bins, frames].
     """
-    y, sr = librosa.load(AUDIO_FILE, sr=None, mono=True)
-    hop_length = int(sr / FPS)
-    stft = np.abs(librosa.stft(y, n_fft=NUM_FREQ * 2, hop_length=hop_length))
-    stft = stft[:NUM_FREQ, :DURATION * FPS]  # [freq_bins, frames]
-    stft = stft / np.max(stft)  # normalize
+    y, sr = librosa.load(config.audio_file, sr=None, mono=True)
+    hop_length = int(sr / config.fps)  # frames per second
+    bands = config.num_frequency_bands
+    frames = config.duration * config.fps
+    stft = np.abs(librosa.stft(y, n_fft=bands * 2, hop_length=hop_length))
+    stft = stft[:bands, :frames]
+    stft = stft / np.max(stft) # normalize
     return stft
 
 class AudioInfo:
@@ -35,15 +39,15 @@ def frequency_to_color(ratio: float) -> tuple:
     r, g, b = colorsys.hsv_to_rgb(hue, 1, 1)
     return (r, g, b)
 
-def get_audio_info(stft: np.ndarray, sr: int) -> list:
+def get_audio_info(stft: np.ndarray, config: VisualConfig) -> list:
     """
     Compute AudioInfo for all frames, with normalization.
     :param stft: Short Time Fourier Transform of the audio, shape [freq_bins, frames].
-    :param sr: Sample rate of the audio.
+    :param config: VisualConfig object with settings.
     :return: List of AudioInfo objects for each frame."""
-    freqs = np.linspace(0, sr // 2, stft.shape[0])
+    freqs = np.linspace(0, config.num_frequency_bands // 2, stft.shape[0])
     max_freq = freqs[-1]
-    freq_weights = 1.0 - (freqs / max_freq) ** LOWER_FREQ_WEIGHT_FUNC_EXPONENT
+    freq_weights = 1.0 - (freqs / max_freq) ** config.freq_band_weight_func_exponent
     loudness_arr = np.sum(stft * freq_weights[:, None], axis=0)
     avg_freq_arr = np.sum(freqs[:, None] * stft, axis=0) / (np.sum(stft, axis=0) + 1e-8)
 

@@ -1,12 +1,12 @@
 from rich.console import Console
 from rich.table import Table
 from rich import box
-from params import *
+from config import VisualConfig
 
 def print_timing_summary(console: Console, audio_duration: float,
                          render_loop_duration: float, ffmpeg_duration: float,
                          total_rendering_time: float, total_writing_time: float,
-                         total_frames: int) -> None:
+                         total_frames: int, config: VisualConfig) -> None:
     """
     Prints a summary of the timing for each stage of the process.
     :param console: The console to print to.
@@ -16,6 +16,7 @@ def print_timing_summary(console: Console, audio_duration: float,
     :param total_rendering_time: Total time spent rendering frames.
     :param total_writing_time: Total time spent writing frames to video.
     :param total_frames: Total number of frames rendered.
+    :param config: VisualConfig object with settings.
     """
     total_time = audio_duration + render_loop_duration + ffmpeg_duration
     table = Table(title="TIMING SUMMARY", box=box.ROUNDED)
@@ -40,6 +41,6 @@ def print_timing_summary(console: Console, audio_duration: float,
     table.add_row("Total", 
                 f"{total_time:.2f}", 
                 "100%")
-    console.log(f"Rendered {DURATION} seconds of video at {FPS} FPS ({total_frames} frames)")
-    console.log(f"Final video with audio saved as [bold][underlined]{FINAL_VIDEO_FILE}[/underlined][/bold]")
+    console.log(f"Rendered {config.duration} seconds of video at {config.fps} FPS ({total_frames} frames)")
+    console.log(f"Final video with audio saved as [bold][underlined]{config.output_file}[/underlined][/bold]")
     console.print("\n", table, "\n")
