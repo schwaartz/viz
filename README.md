@@ -1,21 +1,43 @@
 # Audio Visualizer
 
-A Python-based audio visualizer that creates animated videos with moving shapes and colors responding to music.
+Creates animated videos with shapes and colors that react to music.
+The visuals are dependent on the volume and the frequencies of the music.
+All parameters can be adjusted through the use of a dedicated config file.
 
-## Requirements
+## Setup
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Install FFmpeg (required)
+sudo apt install ffmpeg  # Debian
 ```
 
 ## Usage
 
-1. Place your audio file in the `input/` directory
-2. Update the `AUDIO_FILE` path in `constants.py`
-3. Run the visualizer:
-
 ```bash
-python3 main.py
+# Basic usage
+python main.py song.mp3
+
+# With options
+python main.py song.mp3 -o output.mp4 -c config.json
 ```
 
-The final video will be saved in the `output/` directory.
+### Options
+
+- `-o, --output` - Output video file
+- `-c, --config` - Custom config file
+
+## Configuration
+
+Edit `config.json` to customize visuals. Key settings:
+
+- `circle_loudness_scale_factor` - Shape size response
+- `base_wave_speed` - Wave animation speed
+- `brightness` - Overall brightness
+- `fps`, `width`, `height` - Quality settings
+- ...
+
+Since the name of the config file is a command line option, it is possible
+to store multiple different config files.

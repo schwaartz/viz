@@ -23,7 +23,7 @@ from utils.argument_parser import parse_arguments
 args = parse_arguments()
 console = Console()
 console.log("Starting program")
-config: VisualConfig = load_config(console=console)
+config: VisualConfig = load_config(config_file=args.config, console=console)
 
 # ==== Initialize Pygame with OpenGL ====
 pygame.init()
@@ -101,6 +101,8 @@ with Progress(
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+                console.log("Quitting program")
+                writer.close()
                 exit()
         
         curr_info: AudioInfo = audio_info[frame]
