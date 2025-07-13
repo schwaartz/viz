@@ -1,6 +1,6 @@
 import librosa
 import numpy as np
-from constants import *
+from params import *
 import colorsys
 
 def short_time_fourrier_transform() -> np.ndarray:

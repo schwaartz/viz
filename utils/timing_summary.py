@@ -1,7 +1,7 @@
 from rich.console import Console
 from rich.table import Table
 from rich import box
-from constants import *
+from params import *
 
 def print_timing_summary(console: Console, audio_duration: float,
                          render_loop_duration: float, ffmpeg_duration: float,

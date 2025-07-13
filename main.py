@@ -9,7 +9,7 @@ from pygame.locals import *
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 
-from constants import *
+from params import *
 from visuals.create_circle import create_circle
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
 from utils.ema import apply_asymmetric_ema
@@ -20,6 +20,7 @@ from utils.timing_summary import print_timing_summary
 # ==== Pretty Printing ====
 console = Console()
 console.log("Starting program")
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
 
 
 # ==== Initialize Pygame with OpenGL ====
@@ -163,10 +164,13 @@ with Progress(
 
         # Render to BOTH screen and framebuffer
         render_start = time.time()
-        ctx.screen.use()
-        ctx.clear(0.0, 0.0, 0.0, 1.0)
-        bg_quad_vao.render(moderngl.TRIANGLE_FAN)
-        shape_vao.render(moderngl.TRIANGLE_FAN)
+
+        # Only render every 10th frame to reduce load (for preview)
+        if frame % 10 == 0:
+            ctx.screen.use()
+            ctx.clear(0.0, 0.0, 0.0, 1.0)
+            bg_quad_vao.render(moderngl.TRIANGLE_FAN)
+            shape_vao.render(moderngl.TRIANGLE_FAN)
         
         fbo.use()
         fbo.clear(0.0, 0.0, 0.0, 1.0)
