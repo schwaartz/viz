@@ -44,3 +44,7 @@ Edit `config.json` to customize visuals. Key settings:
 
 Since the name of the config file is a command line option, it is possible
 to store multiple different config files.
+
+## License
+
+MIT License - see [LICENSE](LICENSE.txt)
