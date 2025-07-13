@@ -3,6 +3,7 @@
 Creates animated videos with shapes and colors that react to music.
 The visuals are dependent on the volume and the frequencies of the music.
 All parameters can be adjusted through the use of a dedicated config file.
+The video is rendered using GLSL.
 
 ![Audio Visualizer Example](images/example.gif)
 Example GIF for Faster by A.Oonthebeat
