@@ -4,6 +4,9 @@ Creates animated videos with shapes and colors that react to music.
 The visuals are dependent on the volume and the frequencies of the music.
 All parameters can be adjusted through the use of a dedicated config file.
 
+![Audio Visualizer Example](images/example.gif)
+Example GIF
+
 ## Setup
 
 ```bash
