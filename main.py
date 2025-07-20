@@ -1,234 +1,121 @@
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
+from pygame.locals import *
 import moderngl
 import numpy as np
 import imageio
 import subprocess
-import os
 import time
 from rich.console import Console
-from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
-
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
-from pygame.locals import *
-
 from visuals.create_circle import create_circle
-from audio.audio_processing import short_time_fourrier_transform, get_audio_info, AudioInfo
-from utils.ema import apply_asymmetric_ema
-from utils.load_shader import load_shader_program
+from visuals.create_quad import create_quad
+from audio.audio_processing import short_time_fourrier_transform, get_audio_info
+from shaders.utils.load_shader import load_shader_program
 from utils.timing_summary import print_timing_summary
 from config import VisualConfig, load_config
 from utils.argument_parser import parse_arguments
-
-# ==== Config ====
-args = parse_arguments()
-console = Console()
-console.log("Starting program")
-config: VisualConfig = load_config(config_file=args.config, console=console)
-
-# ==== Initialize Pygame with OpenGL ====
-pygame.init()
-pygame.display.set_mode((config.width, config.height), DOUBLEBUF | OPENGL)
-pygame.display.set_caption("Audio Visualizer - Live Preview")
+from render_loop import render_loop
 
 
-# ==== Visuals ====
-# Create ModernGL context from pygame's OpenGL context
-ctx = moderngl.create_context()
-writer = imageio.get_writer(config.temp_file, fps=config.fps)
+def main():
+    """
+    Main function to run the audio visualizer. It initializes the Pygame window,
+    sets up the ModernGL context, loads shaders, processes audio, and runs the
+    render loop. Finally, it combines the rendered video with audio using
+    FFmpeg.
+    """
+    args = parse_arguments()
+    console = Console()
+    console.log("Starting program")
+    config: VisualConfig = load_config(config_file=args.config, console=console)
 
-shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
-shape_prog['protr_base_thickness'].value = config.protrusion_base_thickness 
-shape_prog['protr_thickness_factor'].value = config.protrusion_thickening_factor  
-shape_prog['height_width_ratio'].value = config.height / config.width
-shape_prog['protr_amount'].value = config.num_protrusions
-shape_prog['protr_scale'].value = config.protrusion_scale
-shape_prog['protr_variability'].value = config.protrusion_variability
+    pygame.init()
+    pygame.display.set_mode((config.width, config.height), DOUBLEBUF | OPENGL)
+    pygame.display.set_caption("Audio Visualizer - Live Preview")
+    ctx = moderngl.create_context()
+    writer = imageio.get_writer(config.temp_file, fps=config.fps)
 
-bg_wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
-bg_quad_vertices = np.array([
-    [-1.0, -1.0],
-    [ 1.0, -1.0],
-    [ 1.0,  1.0],
-    [-1.0,  1.0], 
-], dtype='f4')
-bg_quad_vbo = ctx.buffer(bg_quad_vertices.tobytes())
-bg_quad_vao = ctx.simple_vertex_array(bg_wave_prog, bg_quad_vbo, 'in_pos')
-shape_vao = create_circle(ctx, shape_prog, config)
+    shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
+    _set_shape_prog_uniforms(shape_prog, config)
+    wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
+    quad_vao = create_quad(ctx, wave_prog)
+    shape_vao = create_circle(ctx, shape_prog, config)
 
-# Create framebuffer for video output
-fbo = ctx.simple_framebuffer((config.width, config.height))
+    fbo = ctx.simple_framebuffer((config.width, config.height))
 
+    console.log(f"Processing audio file [bold]{args.input_audio}[/bold]")
+    audio_info, audio_duration = _process_audio(args.input_audio, config)
 
-# ==== Audio ====
-console.log(f"Processing audio file [bold]{args.input_audio}[/bold]")
-audio_start = time.time()
-stft = short_time_fourrier_transform(args.input_audio, config)
+    timings = render_loop(ctx, writer, audio_info, config, wave_prog, shape_prog, quad_vao, shape_vao, fbo, console)
+    (render_loop_duration, total_rendering_time, total_writing_time) = timings
 
-console.log("Extracting audio information")
-audio_info = get_audio_info(stft, config)
-audio_duration = time.time() - audio_start
+    console.log("\n", "Combining video with audio using FFmpeg")
+    ffmpeg_duration = _combine_audio_with_video(config, args)
 
+    print_timing_summary(
+        console,
+        audio_duration,
+        render_loop_duration,
+        ffmpeg_duration,
+        total_rendering_time,
+        total_writing_time,
+        len(audio_info),
+        config,
+        args.output if args.output else 'output.mp4'
+    )
 
-# ==== Render Loop ====
-console.log("Starting render loop\n")
-render_loop_start = time.time()
-total_rendering_time = 0.0
-total_writing_time = 0.0
+def _set_shape_prog_uniforms(shape_prog: moderngl.Program, config: VisualConfig) -> None:
+    """
+    Set the uniforms for the shape shader program based on the config.
+    :param shape_prog: The shader program for shapes.
+    :param config: The VisualConfig object containing settings.
+    """
+    shape_prog['protr_base_thickness'].value = config.protrusion_base_thickness 
+    shape_prog['protr_thickness_factor'].value = config.protrusion_thickening_factor  
+    shape_prog['height_width_ratio'].value = config.height / config.width
+    shape_prog['protr_amount'].value = config.num_protrusions
+    shape_prog['protr_scale'].value = config.protrusion_scale
+    shape_prog['protr_variability'].value = config.protrusion_variability
 
-frame_since_last_wave = 0
-active_waves = []
-curr_rotation = 0.0 
-prev_radius_scaler = 0.0
-prev_avg_freq = 0.0
-prev_brightness = 1.0
-prev_color = np.array([0.0, 0.0, 0.0])
+def _process_audio(audio_file: str, config: VisualConfig) -> tuple:
+    """
+    Process the audio file to extract the short-time Fourier transform (STFT)
+    and audio information.
+    :param audio_file: Path to the input audio file.
+    :param config: VisualConfig object with settings.
+    :return: Tuple containing AudioInfo and the time it took.
+    """
+    start_time = time.time()
+    stft = short_time_fourrier_transform(audio_file, config)
+    audio_info = get_audio_info(stft, config)
+    processing_time = time.time() - start_time
+    return audio_info, processing_time
 
-with Progress(
-    TextColumn("{task.description}"),
-    BarColumn(),
-    "[progress.percentage]{task.percentage:>3.0f}%",
-    "•",
-    "[cyan]{task.completed}/{task.total} frames",
-    "•",
-    TimeElapsedColumn(),
-    "•",
-    TimeRemainingColumn(),
-    console=Console()
-) as progress:
-    render_task = progress.add_task("Rendering and storing frames", total=len(audio_info))
-    
-    for frame in range(len(audio_info)):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                console.log("Quitting program")
-                writer.close()
-                exit()
-        
-        curr_info: AudioInfo = audio_info[frame]
-        current_color = np.array(curr_info.color)
-        color_diff = np.linalg.norm(current_color - prev_color)
-        frame_since_last_wave += 1
-        
-        # Calculate values
-        new_radius_scaler = curr_info.loudness * config.circle_loudness_scale_factor
-        radius_scaler = apply_asymmetric_ema(prev_radius_scaler, new_radius_scaler, config.alpha_up_radius, config.alpha_down_radius)
-        prev_radius_scaler = radius_scaler
+def _combine_audio_with_video(config: VisualConfig, args) -> float:
+    """
+    Combine the rendered video frames with the audio using FFmpeg.
+    :param config: VisualConfig object with settings.
+    :param args: Command line arguments containing input audio and output file.
+    :return: Duration of the FFmpeg processing.
+    """
+    ffmpeg_start = time.time()
+    default_output_file = args.input_audio.replace('.mp3', '.mp4')
+    process = subprocess.Popen([
+        'ffmpeg',
+        '-y',
+        '-i', config.temp_file,
+        '-i', args.input_audio,
+        '-c:v', 'copy',
+        '-map', '0:v:0',
+        '-map', '1:a:0',
+        '-shortest',
+        args.output if args.output else default_output_file, 
+    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process.communicate()
+    ffmpeg_duration = time.time() - ffmpeg_start
+    os.remove(config.temp_file)
+    return ffmpeg_duration
 
-        rotations_per_frame = curr_info.loudness * config.rotation_speed / (60 * config.fps)
-        curr_rotation = curr_rotation + rotations_per_frame * 2 * np.pi
-
-        new_avg_freq = curr_info.avg_freq
-        avg_freq = apply_asymmetric_ema(prev_avg_freq, new_avg_freq, config.alpha_up_avg_freq, config.alpha_down_avg_freq)
-        prev_avg_freq = avg_freq
-
-        # Wave spawning logic
-        if (frame == 0 or color_diff > config.color_change_threshold or
-            frame_since_last_wave > config.max_frames_between_waves or len(active_waves) == 0):
-            active_waves.append({
-                'color': curr_info.color,
-                'radius': 0.0
-            })
-            prev_color = current_color.copy()
-            frame_since_last_wave = 0
-
-        # Update waves
-        for wave in active_waves.copy():
-            dynamic_speed = config.base_wave_speed + curr_info.loudness * config.wave_speed_loudness_scale_factor
-            wave['radius'] += dynamic_speed
-            if wave['radius'] > config.wave_removal_radius and len(active_waves) > 1:
-                active_waves.remove(wave)
-
-        if len(active_waves) > config.max_waves:
-            active_waves = active_waves[-config.max_waves:]
-        
-        # Prepare wave data
-        wave_colors = []
-        wave_radii = []
-        
-        for wave in active_waves:
-            wave_colors.append(wave['color'])
-            wave_radii.append(wave['radius'])
-        
-        while len(wave_colors) < config.max_waves:
-            wave_colors.append([0.0, 0.0, 0.0])
-        while len(wave_radii) < config.max_waves:
-            wave_radii.append(0.0)
-        
-        # Set uniforms
-        bg_wave_prog['wave_colors'].value = wave_colors
-        bg_wave_prog['wave_radii'].value = wave_radii
-        bg_wave_prog['num_waves'].value = len(active_waves)
-        bg_wave_prog['wave_thickness'].value = config.wave_thickness
-        bg_wave_prog['brightness'].value = config.brightness
-
-        shape_prog['rotation'].value = curr_rotation
-        shape_prog['radius_scale'].value = radius_scaler
-        shape_prog['avg_freq'].value = avg_freq
-
-        # Only render every 10th frame to reduce load (for preview)
-        if frame % 10 == 0:
-            ctx.screen.use()
-            ctx.clear(0.0, 0.0, 0.0, 1.0)
-            render_start = time.time()
-            bg_quad_vao.render(moderngl.TRIANGLE_FAN)
-            shape_vao.render(moderngl.TRIANGLE_FAN)
-            render_duration = time.time() - render_start
-            total_rendering_time += render_duration
-        
-        fbo.use()
-        fbo.clear(0.0, 0.0, 0.0, 1.0)
-        render_start = time.time()
-        bg_quad_vao.render(moderngl.TRIANGLE_FAN)
-        shape_vao.render(moderngl.TRIANGLE_FAN)
-        render_duration = time.time() - render_start
-        total_rendering_time += render_duration
-
-        pygame.display.flip()
-
-        pixels = fbo.read(components=3, alignment=1)
-        image = np.frombuffer(pixels, dtype=np.uint8).reshape((config.height, config.width, 3))
-        write_start = time.time()
-        writer.append_data(np.flip(image, axis=0))
-        write_duration = time.time() - write_start
-        total_writing_time += write_duration
-
-        progress.update(render_task, advance=1)
-
-pygame.quit()
-writer.close()
-render_loop_duration = time.time() - render_loop_start
-
-
-# ==== Combine with audio ====
-ffmpeg_start = time.time()
-console.print("\n")
-console.log("Combining video with audio using FFmpeg")
-default_output_file = args.input_audio.replace('.mp3', '.mp4')
-process = subprocess.Popen([
-    'ffmpeg',
-    '-y',
-    '-i', config.temp_file,
-    '-i', args.input_audio,
-    '-c:v', 'copy',
-    '-map', '0:v:0',
-    '-map', '1:a:0',
-    '-shortest',
-    args.output if args.output else default_output_file, 
-], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-process.communicate()
-ffmpeg_duration = time.time() - ffmpeg_start
-
-os.remove(config.temp_file)
-
-
-# ==== Timing Summary ====
-print_timing_summary(
-    console,
-    audio_duration,
-    render_loop_duration,
-    ffmpeg_duration,
-    total_rendering_time,
-    total_writing_time,
-    len(audio_info)
-)
+if __name__ == "__main__":
+    main()
