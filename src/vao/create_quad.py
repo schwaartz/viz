@@ -1,7 +1,7 @@
 import numpy as np
 import moderngl
 
-def create_quad(ctx: moderngl.Context, shader_program: moderngl.Program) -> moderngl.VertexArray:
+def create_quad_vao(ctx: moderngl.Context, shader_program: moderngl.Program) -> moderngl.VertexArray:
     """
     Create a quad vertex array object for rendering a full-screen quad.
     :param ctx: ModernGL context.

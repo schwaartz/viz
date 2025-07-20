@@ -2,7 +2,7 @@ import numpy as np
 import moderngl
 from config import VisualConfig
 
-def create_circle(ctx: moderngl.Context, prog: moderngl.Program, config: VisualConfig) -> moderngl.VertexArray:
+def create_circle_vao(ctx: moderngl.Context, prog: moderngl.Program, config: VisualConfig) -> moderngl.VertexArray:
     """
     Creates a vertex array object (VAO) representing a circle.
     :param ctx: ModernGL context.

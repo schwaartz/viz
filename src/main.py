@@ -8,8 +8,8 @@ import imageio
 import subprocess
 import time
 from rich.console import Console
-from vao.create_circle import create_circle
-from vao.create_quad import create_quad
+from vao.create_circle import create_circle_vao
+from vao.create_quad import create_quad_vao
 from audio.audio_processing import short_time_fourrier_transform, get_audio_info
 from shaders.utils.load_shader import load_shader_program
 from timing_summary import print_timing_summary
@@ -39,8 +39,8 @@ def main():
     shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')
     _set_shape_prog_uniforms(shape_prog, config)
     wave_prog = load_shader_program(ctx, 'shaders/wave.vert', 'shaders/wave.frag')
-    quad_vao = create_quad(ctx, wave_prog)
-    shape_vao = create_circle(ctx, shape_prog, config)
+    quad_vao = create_quad_vao(ctx, wave_prog)
+    shape_vao = create_circle_vao(ctx, shape_prog, config)
 
     fbo = ctx.simple_framebuffer((config.width, config.height))
 
