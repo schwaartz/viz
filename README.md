@@ -25,6 +25,7 @@ sudo apt install ffmpeg  # Debian
 **Note:** Run these commands from the `/src` directory
 
 ```bash
+# Running the main program
 python main.py song.mp3
 
 # With options
