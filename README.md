@@ -20,16 +20,16 @@ sudo apt install ffmpeg  # Debian
 
 ## Usage
 
-````bash
-# Basic usage
-**Note:** Run these commands from the `/src` directory.
+# Basic usage.
+
+**Note:** Run these commands from the `/src` directory
 
 ```bash
 python main.py song.mp3
 
 # With options
 python main.py song.mp3 -o output.mp4 -c config.json
-````
+```
 
 ### Options
 
