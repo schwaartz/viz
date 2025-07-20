@@ -30,9 +30,7 @@ def main():
     console.log("Starting program")
     config: VisualConfig = load_config(config_file=args.config, console=console)
 
-    pygame.init()
-    pygame.display.set_mode((config.width, config.height), DOUBLEBUF | OPENGL)
-    pygame.display.set_caption("Audio Visualizer - Live Preview")
+    _initialize_pygame(config)
     ctx = moderngl.create_context()
     writer = imageio.get_writer(config.temp_file, fps=config.fps)
 
@@ -42,12 +40,10 @@ def main():
     quad_vao = create_quad_vao(ctx, wave_prog)
     shape_vao = create_circle_vao(ctx, shape_prog, config)
 
-    fbo = ctx.simple_framebuffer((config.width, config.height))
-
     console.log(f"Processing audio file [bold]{args.input_audio}[/bold]")
     audio_info, audio_duration = _process_audio(args.input_audio, config)
 
-    timings = render_loop(ctx, writer, audio_info, config, wave_prog, shape_prog, quad_vao, shape_vao, fbo, console)
+    timings = render_loop(ctx, writer, audio_info, config, wave_prog, shape_prog, quad_vao, shape_vao, console)
     (render_loop_duration, total_rendering_time, total_writing_time) = timings
 
     console.log("\n", "Combining video with audio using FFmpeg")
@@ -64,6 +60,15 @@ def main():
         config,
         args.output if args.output else 'output.mp4'
     )
+
+def _initialize_pygame(config: VisualConfig) -> None:
+    """
+    Initialize Pygame with the specified configuration.
+    :param config: VisualConfig object containing settings.
+    """
+    pygame.init()
+    pygame.display.set_mode((config.width, config.height), DOUBLEBUF | OPENGL)
+    pygame.display.set_caption("Audio Visualizer - Live Preview")
 
 def _set_shape_prog_uniforms(shape_prog: moderngl.Program, config: VisualConfig) -> None:
     """

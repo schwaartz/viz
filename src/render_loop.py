@@ -15,8 +15,7 @@ from config import VisualConfig
 def render_loop(ctx: moderngl.Context, writer, audio_info: list,
                 config: VisualConfig, bg_wave_prog: moderngl.Program,
                 shape_prog: moderngl.Program, bg_quad_vao: moderngl.VertexArray,
-                shape_vao: moderngl.VertexArray, fbo: moderngl.Framebuffer,
-                console: Console) -> tuple:
+                shape_vao: moderngl.VertexArray, console: Console) -> tuple:
     """
     Main render loop that processes audio information and renders frames accordingly.
     It also shows a live preview and a progress bar in the console while saving the frames
@@ -29,11 +28,11 @@ def render_loop(ctx: moderngl.Context, writer, audio_info: list,
     :param shape_prog: Shape shader program.
     :param bg_quad_vao: Vertex array object for the background quad.
     :param shape_vao: Vertex array object for the shape.
-    :param fbo: Framebuffer for rendering.
     :param console: Console for logging.
     :return: Tuple containing render loop duration, total rendering time, and total writing time.
     """
     console.log("Starting render loop\n")
+    fbo = ctx.simple_framebuffer((config.width, config.height))
     render_loop_start = time.time()
     prev_color = np.array([0.0, 0.0, 0.0])
     frame_since_last_wave = 0
