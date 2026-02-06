@@ -18,9 +18,7 @@ pip install -r requirements.txt
 sudo apt install ffmpeg  # Debian
 ```
 
-## Usage
-
-# Basic usage.
+# Basic usage
 
 **Note:** Run these commands from the `/src` directory
 
@@ -32,7 +30,7 @@ python main.py song.mp3
 python main.py song.mp3 -o output.mp4 -c config.json
 ```
 
-### Options
+## Options
 
 - `-o, --output` Output video file
 - `-c, --config` Custom config file
