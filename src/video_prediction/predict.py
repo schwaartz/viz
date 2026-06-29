@@ -1,4 +1,6 @@
 import argparse
+import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ from video_prediction.model import VideoPredictor
 from video_prediction.audio_preprocessing import generate_spectrogram
 from video_prediction.constants import (
     DEFAULT_MODEL_PATH,
+    WINDOW_SECONDS,
     VIDEO_RESIZE,
     VIDEO_TARGET_FPS,
     AUDIO_FEATURES_PER_SECOND
@@ -43,6 +46,47 @@ def save_video(frames: np.ndarray, output_path: str, fps: int, width: int, heigh
         writer.close()
 
 
+def _mux_audio_with_video(video_path: str, audio_path: str, output_path: str) -> None:
+    """Attach the original audio track to the generated video clip."""
+    process = subprocess.Popen([
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_path,
+        "-i",
+        audio_path,
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-shortest",
+        output_path,
+    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process.communicate()
+    if process.returncode != 0:
+        raise RuntimeError("ffmpeg failed while muxing audio and video")
+
+
+def _iter_audio_window_starts(audio_path: str, window_seconds: float) -> list[float]:
+    """Return non-overlapping window starts that cover the whole audio file."""
+    import librosa
+
+    duration = float(librosa.get_duration(path=audio_path))
+    if duration <= 0:
+        return [0.0]
+
+    starts = []
+    start = 0.0
+    while start < duration:
+        starts.append(round(start, 6))
+        start += window_seconds
+    return starts or [0.0]
+
+
 def main():
     """
     Main function to predict a full video from a given audio file using the
@@ -66,19 +110,38 @@ def main():
     model.to(device)
     model.eval()
 
-    audio_features = generate_spectrogram(
-        args.input_audio,
-        freq=AUDIO_FEATURES_PER_SECOND,
-        start_time=0,
-        duration=None,
-    )
-    audio_features = torch.from_numpy(audio_features).unsqueeze(0).unsqueeze(0).to(device)
+    output_path = Path(args.output_video)
+    temp_video_path = output_path.with_suffix(".silent.mp4")
 
-    with torch.no_grad():
-        output = model(audio_features)
-        output = output.squeeze(0).detach().cpu().numpy()
+    window_starts = _iter_audio_window_starts(args.input_audio, WINDOW_SECONDS)
+    writer: Any = imageio.get_writer(str(temp_video_path), fps=args.fps)
+    try:
+        with torch.no_grad():
+            for start_time in window_starts:
+                audio_window = generate_spectrogram(
+                    args.input_audio,
+                    freq=AUDIO_FEATURES_PER_SECOND,
+                    start_time=start_time,
+                    duration=WINDOW_SECONDS,
+                )
+                audio_window = torch.from_numpy(audio_window).unsqueeze(0).unsqueeze(0).to(device)
+                output = model(audio_window).squeeze(0).detach().cpu().numpy()
 
-    save_video(output, args.output_video, fps=args.fps, width=args.video_width, height=args.video_height)
+                frames = np.asarray(output)
+                if frames.ndim == 4 and frames.shape[1] in (1, 3):
+                    frames = np.transpose(frames, (0, 2, 3, 1))
+                if frames.dtype != np.uint8:
+                    frames = np.clip(frames, 0.0, 1.0)
+                    frames = (frames * 255.0).astype(np.uint8)
+                for frame in frames:
+                    if frame.shape[0] != args.video_height or frame.shape[1] != args.video_width:
+                        frame = np.asarray(Image.fromarray(frame).resize((args.video_width, args.video_height), Image.Resampling.BILINEAR))
+                    writer.append_data(frame)
+    finally:
+        writer.close()
+
+    _mux_audio_with_video(str(temp_video_path), args.input_audio, str(output_path))
+    os.remove(temp_video_path)
 
 if __name__ == "__main__":
     main()

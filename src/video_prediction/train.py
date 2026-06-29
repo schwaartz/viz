@@ -26,17 +26,22 @@ def train(model: Module, dataset: Dataset, epochs: int, batch_size: int, lr: flo
     loss_func = torch.nn.MSELoss()
     model.to(device)
     model.train()
+    use_amp = device.type == "cuda"
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     for epoch in range(epochs):
         for i, batch in enumerate(dataloader):
-            audio = batch["audio"].to(device)
-            video = batch["video"].to(device)
+            audio = batch["audio"].to(device, non_blocking=use_amp)
+            video = batch["video"].to(device, non_blocking=use_amp)
 
-            optimizer.zero_grad()
-            output = model(audio)
-            loss = loss_func(output, video)
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                output = model(audio)
+                loss = loss_func(output, video)
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
             if i % 100 == 0:
                 print(f"EPOCH {epoch + 1}/{epochs}, BATCH {i}/{len(dataloader)}, LOSS: {loss.item()}")

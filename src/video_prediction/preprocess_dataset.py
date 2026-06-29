@@ -64,9 +64,9 @@ def build_dataset(
     Returns:
         Path to the manifest file listing all generated samples.
     """
-    audio_root = Path(audio_dir)
-    video_root = Path(video_dir)
-    output_root = Path(output_dir)
+    audio_root = Path(audio_dir).resolve()
+    video_root = Path(video_dir).resolve()
+    output_root = Path(output_dir).resolve()
     samples_root = output_root / "samples"
     output_root.mkdir(parents=True, exist_ok=True)
     samples_root.mkdir(parents=True, exist_ok=True)
@@ -80,7 +80,9 @@ def build_dataset(
             # Skip clips that cannot provide a full 4-second window.
             import librosa
 
-            duration = float(librosa.get_duration(path=str(audio_path)))
+            audio_duration = float(librosa.get_duration(path=str(audio_path)))
+            video_duration = float(librosa.get_duration(path=str(video_path)))
+            duration = min(audio_duration, video_duration)
             if duration < window_seconds:
                 continue
 
@@ -99,6 +101,11 @@ def build_dataset(
                     duration=window_seconds,
                 )
 
+                expected_audio_shape = (128, int(window_seconds * audio_features_per_second))
+                expected_video_shape = (int(window_seconds * video_target_fps), 3, video_resize[0], video_resize[1])
+                if audio.shape != expected_audio_shape or video.shape != expected_video_shape:
+                    continue
+
                 sample_name = f"{audio_path.stem}_{written:06d}.npz"
                 sample_path = samples_root / sample_name
                 np.savez_compressed(
@@ -114,9 +121,9 @@ def build_dataset(
                 manifest.write(
                     json.dumps(
                         {
-                            "sample_path": str(sample_path),
-                            "source_audio": str(audio_path),
-                            "source_video": str(video_path),
+                            "sample_path": str(sample_path.resolve()),
+                            "source_audio": str(audio_path.resolve()),
+                            "source_video": str(video_path.resolve()),
                             "start_time": start_time,
                             "duration": window_seconds,
                         }
@@ -131,7 +138,7 @@ def build_dataset(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build cached 4-second audio/video clips.")
     parser.add_argument("--audio-dir", default="../input")
-    parser.add_argument("--video-dir", default="output")
+    parser.add_argument("--video-dir", default="../output")
     parser.add_argument("--output-dir", default="video_prediction/data")
     parser.add_argument("--window-seconds", type=float, default=WINDOW_SECONDS)
     parser.add_argument("--stride-seconds", type=float, default=WINDOW_SECONDS)

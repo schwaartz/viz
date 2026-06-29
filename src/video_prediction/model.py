@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from video_prediction.constants import AUDIO_FEATURES_PER_VIDEO_FEATURE, FREQ_BINS, VIDEO_RESIZE, VIDEO_TARGET_FPS, WINDOW_SECONDS
+from video_prediction.constants import FREQ_BINS, VIDEO_RESIZE, VIDEO_TARGET_FPS, WINDOW_SECONDS
 
 
 class VideoPredictor(nn.Module):
@@ -14,17 +14,16 @@ class VideoPredictor(nn.Module):
         (batch_size, video_frames, 3, height, width)
     """
 
-    def __init__(self, hidden_size: int = 128, low_res_scale: int = 4):
+    def __init__(self, hidden_size: int = 128, low_res_scale: int = 8):
         super().__init__()
         self.freq_bins = FREQ_BINS
         self.video_frames = int(WINDOW_SECONDS * VIDEO_TARGET_FPS)
-        self.audio_chunk_size = int(AUDIO_FEATURES_PER_VIDEO_FEATURE)
         self.hidden_size = hidden_size
 
         self.low_res_height = VIDEO_RESIZE[0] // low_res_scale
         self.low_res_width = VIDEO_RESIZE[1] // low_res_scale
-        self.low_res_channels = 3
-        self.frame_vector_size = self.low_res_channels * self.low_res_height * self.low_res_width
+        self.feature_channels = 64
+        self.frame_vector_size = self.feature_channels * self.low_res_height * self.low_res_width
 
         self.rnn = nn.RNN(
             input_size=self.freq_bins,
@@ -34,6 +33,16 @@ class VideoPredictor(nn.Module):
             nonlinearity="tanh",
         )
         self.frame_head = nn.Linear(self.hidden_size, self.frame_vector_size)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(self.feature_channels, 32, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(8, 3, kernel_size=3, padding=1),
+            nn.Sigmoid(),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Encode the audio sequence and decode one frame per audio chunk."""
@@ -47,22 +56,16 @@ class VideoPredictor(nn.Module):
 
         rnn_out, _ = self.rnn(audio)  # (B, 32, H)
         frame_vectors = self.frame_head(rnn_out)  # (B, 32, C*H*W)
-        frame_vectors = torch.sigmoid(frame_vectors)
 
         frames = frame_vectors.view(
             frame_vectors.size(0),
             self.video_frames,
-            self.low_res_channels,
+            self.feature_channels,
             self.low_res_height,
             self.low_res_width,
         )
 
-        frames = frames.view(-1, self.low_res_channels, self.low_res_height, self.low_res_width)
-        frames = F.interpolate(
-            frames,
-            size=VIDEO_RESIZE,
-            mode="bilinear",
-            align_corners=False,
-        )
-        frames = frames.view(-1, self.video_frames, self.low_res_channels, VIDEO_RESIZE[0], VIDEO_RESIZE[1])
+        frames = frames.view(-1, self.feature_channels, self.low_res_height, self.low_res_width)
+        frames = self.decoder(frames)
+        frames = frames.view(-1, self.video_frames, 3, VIDEO_RESIZE[0], VIDEO_RESIZE[1])
         return frames
