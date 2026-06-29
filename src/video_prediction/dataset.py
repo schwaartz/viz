@@ -1,20 +1,16 @@
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List
-
 import numpy as np
-
-try:
-    import torch
-    from torch.utils.data import Dataset
-except Exception:  # pragma: no cover - lets preprocessing run without torch
-    torch = None
-    Dataset = object
+import torch
+from torch.utils.data import Dataset
 
 
 @dataclass(frozen=True)
 class ClipRecord:
+    """
+    Immutable class representing a single audio/video clip record in the dataset manifest.
+    """
     sample_path: str
     source_audio: str
     source_video: str
@@ -23,6 +19,9 @@ class ClipRecord:
 
 
 def load_manifest(manifest_path: str) -> List[ClipRecord]:
+    """
+    Loads a manifest file containing audio/video clip records and returns a list of ClipRecord instances.
+    """
     records: List[ClipRecord] = []
     with open(manifest_path, "r", encoding="utf-8") as handle:
         for line in handle:
@@ -42,8 +41,9 @@ def load_manifest(manifest_path: str) -> List[ClipRecord]:
 
 
 class CachedClipDataset(Dataset):
-    """Load cached 4-second audio/video windows from a manifest."""
-
+    """
+    Load cached 4-second audio/video windows from a manifest.
+    """
     def __init__(self, manifest_path: str):
         if torch is None:
             raise ImportError("torch is required to use CachedClipDataset")

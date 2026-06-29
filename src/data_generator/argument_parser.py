@@ -11,7 +11,7 @@ def parse_arguments():
     parser.add_argument('-o', '--output', 
                        help='Output video file (default: input filename with .mp4 extension)')
     parser.add_argument('-c', '--config', 
-                       default='config.json',
+                       default='data_generator/config.json',
                        help='Configuration file (default: config.json)')
     
     return parser.parse_args()

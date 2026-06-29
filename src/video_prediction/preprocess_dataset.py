@@ -2,19 +2,21 @@ import argparse
 import json
 from pathlib import Path
 from typing import Iterable, List, Tuple
-
 import numpy as np
-
 from video_prediction.audio_preprocessing import generate_spectrogram
 from video_prediction.video_preprocessing import read_video_frames
-
-WINDOW_SECONDS = 4.0
-AUDIO_FEATURES_PER_SECOND = 32.0
-VIDEO_TARGET_FPS = 8.0
-VIDEO_RESIZE = (128, 128)
-
+from video_prediction.constants import (
+    WINDOW_SECONDS,
+    AUDIO_FEATURES_PER_SECOND,
+    VIDEO_TARGET_FPS,
+    VIDEO_RESIZE,
+)
 
 def _pair_media_files(audio_dir: Path, video_dir: Path) -> List[Tuple[Path, Path]]:
+    """
+    Finds audio and video files with matching stems in the given directories.
+    Returns a list of tuples (audio_path, video_path).
+    """
     audio_map = {path.stem: path for path in audio_dir.glob("*.mp3")}
     video_map = {path.stem: path for path in video_dir.glob("*.mp4")}
     common_stems = sorted(audio_map.keys() & video_map.keys())
@@ -22,6 +24,10 @@ def _pair_media_files(audio_dir: Path, video_dir: Path) -> List[Tuple[Path, Path
 
 
 def _window_starts(duration: float, window_seconds: float, stride_seconds: float) -> Iterable[float]:
+    """
+    Generate start times for sliding windows over a media file of given duration.
+    Returns a list of start times (in seconds) for each window.
+    """
     last_start = duration - window_seconds
     if last_start < 0:
         return []
@@ -44,7 +50,20 @@ def build_dataset(
     video_target_fps: float = VIDEO_TARGET_FPS,
     video_resize: Tuple[int, int] = VIDEO_RESIZE,
 ) -> Path:
-    """Preprocess paired audio/video files into cached 4-second training samples."""
+    """
+    Preprocess paired audio/video files into cached 4-second training samples.
+    Args:
+        audio_dir: Directory containing audio files (.mp3).
+        video_dir: Directory containing video files (.mp4).
+        output_dir: Directory to save the processed samples and manifest.
+        window_seconds: Duration of each sample window in seconds.
+        stride_seconds: Stride between consecutive windows in seconds.
+        audio_features_per_second: Number of audio features per second for spectrogram.
+        video_target_fps: Target frames per second for video frames.
+        video_resize: Target size (height, width) for resized video frames.
+    Returns:
+        Path to the manifest file listing all generated samples.
+    """
     audio_root = Path(audio_dir)
     video_root = Path(video_dir)
     output_root = Path(output_dir)
@@ -111,7 +130,7 @@ def build_dataset(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build cached 4-second audio/video clips.")
-    parser.add_argument("--audio-dir", default="input")
+    parser.add_argument("--audio-dir", default="../input")
     parser.add_argument("--video-dir", default="output")
     parser.add_argument("--output-dir", default="video_prediction/data")
     parser.add_argument("--window-seconds", type=float, default=WINDOW_SECONDS)
