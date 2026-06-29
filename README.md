@@ -72,9 +72,8 @@ correspond to the height and width respectively. There are 3 color channels,
 hence the number 3.
 
 There is no config file for this module. The specific numbers that were used
-here aren't all that important. They can be found in
-`src/video_prediction/constants.py`. The exact architecture can be found in
-`src/video_prediction/model.py`.
+here aren't all that important. They can be found in `src/video_prediction/constants.py`.
+The exact architecture can be found in `src/video_prediction/model.py`.
 
 ## Using the predictor
 

@@ -6,6 +6,10 @@ from pathlib import Path
 from video_prediction.model import VideoPredictor
 from video_prediction.dataset import CachedClipDataset
 from video_prediction.constants import (
+    WINDOW_SECONDS,
+    AUDIO_FEATURES_PER_SECOND,
+    VIDEO_TARGET_FPS,
+    VIDEO_RESIZE,
     DEFAULT_LR,
     DEFAULT_EPOCHS,
     DEFAULT_BATCH_SIZE,
@@ -59,8 +63,35 @@ def main():
     parser.add_argument("--manifest-path", type=str, default="video_prediction/data/manifest.jsonl")
     args = parser.parse_args()
 
+    manifest_path = Path(args.manifest_path)
+    if not manifest_path.is_absolute():
+        manifest_path = manifest_path.resolve()
+
     model = VideoPredictor()
-    dataset = CachedClipDataset(manifest_path=args.manifest_path)
+    dataset = CachedClipDataset(manifest_path=str(manifest_path))
+    if len(dataset) == 0:
+        print("No cached samples matched the current config. Rebuilding the dataset cache...")
+        from video_prediction.preprocess_dataset import build_dataset
+
+        project_root = Path(__file__).resolve().parents[2]
+        build_dataset(
+            audio_dir=str(project_root / "input"),
+            video_dir=str(project_root / "output"),
+            output_dir=str(manifest_path.parent),
+            window_seconds=WINDOW_SECONDS,
+            stride_seconds=WINDOW_SECONDS,
+            audio_features_per_second=AUDIO_FEATURES_PER_SECOND,
+            video_target_fps=VIDEO_TARGET_FPS,
+            video_resize=VIDEO_RESIZE,
+        )
+        dataset = CachedClipDataset(manifest_path=str(manifest_path))
+
+    if len(dataset) == 0:
+        raise RuntimeError(
+            f"Training dataset is empty after rebuilding cache at {manifest_path}. "
+            "Check the input/output media folders and preprocessing settings."
+        )
+
     print(f"Starting training loop:",
           f"\n\t- Epochs: {args.epochs}",
           f"\n\t- Batches: {len(dataset)//args.batch_size}",

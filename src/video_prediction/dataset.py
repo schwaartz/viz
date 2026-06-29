@@ -6,6 +6,14 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from video_prediction.constants import (
+    AUDIO_FEATURES_PER_SECOND,
+    FREQ_BINS,
+    VIDEO_RESIZE,
+    VIDEO_TARGET_FPS,
+    WINDOW_SECONDS,
+)
+
 
 @dataclass(frozen=True)
 class ClipRecord:
@@ -72,8 +80,8 @@ class CachedClipDataset(Dataset):
 
     def _filter_valid_records(self, records: List[ClipRecord]) -> List[ClipRecord]:
         valid_records: List[ClipRecord] = []
-        expected_audio_shape = (128, 128)
-        expected_video_shape = (32, 3, 128, 128)
+        expected_audio_shape = (FREQ_BINS, int(WINDOW_SECONDS * AUDIO_FEATURES_PER_SECOND))
+        expected_video_shape = (int(WINDOW_SECONDS * VIDEO_TARGET_FPS), 3, VIDEO_RESIZE[0], VIDEO_RESIZE[1])
 
         for record in records:
             try:
