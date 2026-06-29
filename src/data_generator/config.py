@@ -3,6 +3,9 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from rich.console import Console
 
+
+_CONFIG_ROOT = Path(__file__).resolve().parent
+
 @dataclass
 class VisualConfig:
     """
@@ -84,6 +87,9 @@ def load_config(config_file: str = 'config.json', console: Console = None) -> Vi
     :return: VisualConfig object with loaded settings.
     """
     config_path = Path(config_file)
+    if not config_path.is_absolute():
+        # Keep config and temp paths anchored to the package folder.
+        config_path = _CONFIG_ROOT / config_path
     
     if config_path.exists():
         with open(config_path, 'r') as f:
@@ -94,6 +100,10 @@ def load_config(config_file: str = 'config.json', console: Console = None) -> Vi
         config = VisualConfig() # default config
         save_config(config, config_file)
         if console: console.log(f"Created default config file: {config_file}")
+
+    if not Path(config.temp_file).is_absolute():
+        # Resolve the temp video path once so rendering and cleanup use the same file.
+        config.temp_file = str(_CONFIG_ROOT / config.temp_file)
     
     config.rescale_constants_based_on_fps()
     return config
@@ -104,5 +114,10 @@ def save_config(config: VisualConfig, config_file: str = 'config.json'):
     :param config: VisualConfig object to save.
     :param config_file: Path where to save the configuration.
     """
-    with open(config_file, 'w') as f:
+    config_path = Path(config_file)
+    if not config_path.is_absolute():
+        config_path = _CONFIG_ROOT / config_path
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, 'w') as f:
         json.dump(asdict(config), f, indent=2)

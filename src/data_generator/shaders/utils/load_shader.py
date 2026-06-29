@@ -1,4 +1,8 @@
+from pathlib import Path
 import moderngl
+
+
+_SHADER_ROOT = Path(__file__).resolve().parents[2]
 
 def load_shader(filepath: str) -> str:
     """
@@ -6,7 +10,12 @@ def load_shader(filepath: str) -> str:
     :param filepath: Path to the shader file.
     :return: Shader source code as a string.
     """
-    with open(filepath, 'r') as file:
+    path = Path(filepath)
+    if not path.is_absolute():
+        # Resolve bundled shader files relative to the package, not the cwd.
+        path = _SHADER_ROOT / path
+
+    with open(path, 'r') as file:
         return file.read()
 
 def load_shader_program(ctx: moderngl.Context, vertex_path: str, fragment_path: str) -> moderngl.Program:

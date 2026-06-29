@@ -7,15 +7,16 @@ import numpy as np
 import imageio
 import subprocess
 import time
+from pathlib import Path
 from rich.console import Console
-from vao.create_circle import create_circle_vao
-from vao.create_quad import create_quad_vao
-from audio.audio_processing import short_time_fourrier_transform, get_audio_info
-from shaders.utils.load_shader import load_shader_program
-from timing_summary import print_timing_summary
-from config import VisualConfig, load_config
-from argument_parser import parse_arguments
-from render_loop import render_loop
+from data_generator.vao.create_circle import create_circle_vao
+from data_generator.vao.create_quad import create_quad_vao
+from data_generator.audio.audio_processing import short_time_fourrier_transform, get_audio_info
+from data_generator.shaders.utils.load_shader import load_shader_program
+from data_generator.timing_summary import print_timing_summary
+from data_generator.config import VisualConfig, load_config
+from data_generator.argument_parser import parse_arguments
+from data_generator.render_loop import render_loop
 
 
 def main():
@@ -32,6 +33,7 @@ def main():
 
     _initialize_pygame(config)
     ctx = moderngl.create_context()
+    Path(config.temp_file).parent.mkdir(parents=True, exist_ok=True)
     writer = imageio.get_writer(config.temp_file, fps=config.fps)
 
     shape_prog = load_shader_program(ctx, 'shaders/shape.vert', 'shaders/shape.frag')

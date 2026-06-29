@@ -1,6 +1,6 @@
 import numpy as np
 import moderngl
-from config import VisualConfig
+from data_generator.config import VisualConfig
 
 def create_circle_vao(ctx: moderngl.Context, prog: moderngl.Program, config: VisualConfig) -> moderngl.VertexArray:
     """

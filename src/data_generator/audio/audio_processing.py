@@ -2,7 +2,7 @@ import librosa
 import numpy as np
 import colorsys
 
-from config import VisualConfig
+from data_generator.config import VisualConfig
 
 def short_time_fourrier_transform(audio_file: str, config: VisualConfig) -> np.ndarray:
     """

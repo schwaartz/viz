@@ -7,9 +7,9 @@ import time
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TimeElapsedColumn
 from pygame.locals import *
-from audio.audio_processing import  AudioInfo
-from functions.ema import apply_asymmetric_ema
-from config import VisualConfig
+from data_generator.audio.audio_processing import  AudioInfo
+from data_generator.functions.ema import apply_asymmetric_ema
+from data_generator.config import VisualConfig
 
 
 def render_loop(ctx: moderngl.Context, writer, audio_info: list,

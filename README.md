@@ -24,10 +24,10 @@ sudo apt install ffmpeg  # Debian
 
 ```bash
 # Running the main program
-python main.py song.mp3
+python -m data_generator.main <mp3_input_path>
 
 # With options
-python main.py song.mp3 -o output.mp4 -c config.json
+python -m data_generator.main <mp3_input_path> -o <mp4_output_path> -c config.json
 ```
 
 ## Options

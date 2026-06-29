@@ -5,8 +5,8 @@ from typing import Iterable, List, Tuple
 
 import numpy as np
 
-from video_prediction.src.audio_preprocessing import generate_spectrogram
-from video_prediction.src.video_preprocessing import read_video_frames
+from video_prediction.audio_preprocessing import generate_spectrogram
+from video_prediction.video_preprocessing import read_video_frames
 
 WINDOW_SECONDS = 4.0
 AUDIO_FEATURES_PER_SECOND = 32.0
