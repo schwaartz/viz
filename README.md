@@ -75,6 +75,9 @@ There is no config file for this module. The specific numbers that were used
 here aren't all that important. They can be found in `src/video_prediction/constants.py`.
 The exact architecture can be found in `src/video_prediction/model.py`.
 
+![Audio Visualizer Example](images/example_prediction.gif)
+Example prediction for Faster by A.Oonthebeat
+
 ## Using the predictor
 
 To train the model, you must first generate some examples using the generator
