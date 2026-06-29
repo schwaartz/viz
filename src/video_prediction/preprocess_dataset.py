@@ -1,0 +1,165 @@
+import argparse
+import json
+from pathlib import Path
+from typing import Iterable, List, Tuple
+import numpy as np
+from video_prediction.audio_preprocessing import generate_spectrogram
+from video_prediction.video_preprocessing import read_video_frames
+from video_prediction.constants import (
+    WINDOW_SECONDS,
+    AUDIO_FEATURES_PER_SECOND,
+    VIDEO_TARGET_FPS,
+    VIDEO_RESIZE,
+)
+
+def _pair_media_files(audio_dir: Path, video_dir: Path) -> List[Tuple[Path, Path]]:
+    """
+    Finds audio and video files with matching stems in the given directories.
+    Returns a list of tuples (audio_path, video_path).
+    """
+    audio_map = {path.stem: path for path in audio_dir.glob("*.mp3")}
+    video_map = {path.stem: path for path in video_dir.glob("*.mp4")}
+    common_stems = sorted(audio_map.keys() & video_map.keys())
+    return [(audio_map[stem], video_map[stem]) for stem in common_stems]
+
+
+def _window_starts(duration: float, window_seconds: float, stride_seconds: float) -> Iterable[float]:
+    """
+    Generate start times for sliding windows over a media file of given duration.
+    Returns a list of start times (in seconds) for each window.
+    """
+    last_start = duration - window_seconds
+    if last_start < 0:
+        return []
+
+    starts = []
+    start = 0.0
+    while start <= last_start + 1e-9:
+        starts.append(round(start, 6))
+        start += stride_seconds
+    return starts
+
+
+def build_dataset(
+    audio_dir: str,
+    video_dir: str,
+    output_dir: str,
+    window_seconds: float = WINDOW_SECONDS,
+    stride_seconds: float = WINDOW_SECONDS,
+    audio_features_per_second: float = AUDIO_FEATURES_PER_SECOND,
+    video_target_fps: float = VIDEO_TARGET_FPS,
+    video_resize: Tuple[int, int] = VIDEO_RESIZE,
+) -> Path:
+    """
+    Preprocess paired audio/video files into cached 4-second training samples.
+    Args:
+        audio_dir: Directory containing audio files (.mp3).
+        video_dir: Directory containing video files (.mp4).
+        output_dir: Directory to save the processed samples and manifest.
+        window_seconds: Duration of each sample window in seconds.
+        stride_seconds: Stride between consecutive windows in seconds.
+        audio_features_per_second: Number of audio features per second for spectrogram.
+        video_target_fps: Target frames per second for video frames.
+        video_resize: Target size (height, width) for resized video frames.
+    Returns:
+        Path to the manifest file listing all generated samples.
+    """
+    audio_root = Path(audio_dir).resolve()
+    video_root = Path(video_dir).resolve()
+    output_root = Path(output_dir).resolve()
+    samples_root = output_root / "samples"
+    output_root.mkdir(parents=True, exist_ok=True)
+    samples_root.mkdir(parents=True, exist_ok=True)
+
+    manifest_path = output_root / "manifest.jsonl"
+    pairs = _pair_media_files(audio_root, video_root)
+
+    written = 0
+    with manifest_path.open("w", encoding="utf-8") as manifest:
+        for audio_path, video_path in pairs:
+            # Skip clips that cannot provide a full 4-second window.
+            import librosa
+
+            audio_duration = float(librosa.get_duration(path=str(audio_path)))
+            video_duration = float(librosa.get_duration(path=str(video_path)))
+            duration = min(audio_duration, video_duration)
+            if duration < window_seconds:
+                continue
+
+            for start_time in _window_starts(duration, window_seconds, stride_seconds):
+                audio = generate_spectrogram(
+                    audio_file=str(audio_path),
+                    freq=audio_features_per_second,
+                    start_time=start_time,
+                    duration=window_seconds,
+                )
+                video = read_video_frames(
+                    video_path=str(video_path),
+                    target_fps=video_target_fps,
+                    resize=video_resize,
+                    start_time=start_time,
+                    duration=window_seconds,
+                )
+
+                expected_audio_shape = (128, int(window_seconds * audio_features_per_second))
+                expected_video_shape = (int(window_seconds * video_target_fps), 3, video_resize[0], video_resize[1])
+                if audio.shape != expected_audio_shape or video.shape != expected_video_shape:
+                    continue
+
+                sample_name = f"{audio_path.stem}_{written:06d}.npz"
+                sample_path = samples_root / sample_name
+                np.savez_compressed(
+                    sample_path,
+                    audio=audio,
+                    video=video,
+                    source_audio=str(audio_path),
+                    source_video=str(video_path),
+                    start_time=start_time,
+                    duration=window_seconds,
+                )
+
+                manifest.write(
+                    json.dumps(
+                        {
+                            "sample_path": str(sample_path.resolve()),
+                            "source_audio": str(audio_path.resolve()),
+                            "source_video": str(video_path.resolve()),
+                            "start_time": start_time,
+                            "duration": window_seconds,
+                        }
+                    )
+                    + "\n"
+                )
+                written += 1
+
+    return manifest_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Build cached 4-second audio/video clips.")
+    parser.add_argument("--audio-dir", default="../input")
+    parser.add_argument("--video-dir", default="../output")
+    parser.add_argument("--output-dir", default="video_prediction/data")
+    parser.add_argument("--window-seconds", type=float, default=WINDOW_SECONDS)
+    parser.add_argument("--stride-seconds", type=float, default=WINDOW_SECONDS)
+    parser.add_argument("--audio-features-per-second", type=float, default=AUDIO_FEATURES_PER_SECOND)
+    parser.add_argument("--video-target-fps", type=float, default=VIDEO_TARGET_FPS)
+    parser.add_argument("--video-width", type=int, default=VIDEO_RESIZE[1])
+    parser.add_argument("--video-height", type=int, default=VIDEO_RESIZE[0])
+    args = parser.parse_args()
+
+    manifest_path = build_dataset(
+        audio_dir=args.audio_dir,
+        video_dir=args.video_dir,
+        output_dir=args.output_dir,
+        window_seconds=args.window_seconds,
+        stride_seconds=args.stride_seconds,
+        audio_features_per_second=args.audio_features_per_second,
+        video_target_fps=args.video_target_fps,
+        video_resize=(args.video_height, args.video_width),
+    )
+    print(manifest_path)
+
+
+if __name__ == "__main__":
+    main()

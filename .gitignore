@@ -1,6 +1,8 @@
 output/
 temp/
 input/
+predictions/
 .venv/
 __pycache__/
 *.pyc
+data/
