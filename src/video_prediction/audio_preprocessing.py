@@ -1,5 +1,6 @@
 import librosa
 import numpy as np
+from video_prediction.constants import FREQ_BINS
 
 def generate_spectrogram(
     audio_file: str,
@@ -16,7 +17,7 @@ def generate_spectrogram(
     
     y, sr = librosa.load(audio_file, sr=None, mono=True, offset=start_time, duration=duration)
     hop_length = int(sr / freq) # Spectrums per second
-    bands = 128  # Number of frequency bands
+    bands = BANDS  # Number of frequency bands
     window_duration = duration if duration is not None else librosa.get_duration(y=y, sr=sr)
     spectrums = int(window_duration * freq)  # Total number of spectrums
     stft = librosa.stft(y, n_fft=bands * 2, hop_length=hop_length)

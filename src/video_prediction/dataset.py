@@ -56,7 +56,8 @@ class CachedClipDataset(Dataset):
     def __getitem__(self, index: int) -> Dict[str, Any]:
         record = self.records[index]
         with np.load(record.sample_path) as data:
-            audio = torch.from_numpy(data["audio"]).float()
+            # Add a channel dimension so the spectrogram is ready for CNN-style models.
+            audio = torch.from_numpy(data["audio"]).float().unsqueeze(0)
             video = torch.from_numpy(data["video"]).float()
 
         return {
